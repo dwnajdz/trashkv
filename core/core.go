@@ -91,8 +91,5 @@ func (db *Database) Save() {
 		fmt.Println(err)
 	}
 
-	_, err = http.Post("http://localhost/save", "application/json", bytes.NewBuffer(j))
-	if err != nil {
-		fmt.Println(err)
-	}
+	http.Post("http://localhost/save", "application/json", bytes.NewBuffer(j))
 }

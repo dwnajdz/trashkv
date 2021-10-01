@@ -40,7 +40,7 @@ func connect(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 	}
 
-	fmt.Fprintf(w, string(j))
+	fmt.Fprint(w, string(j))
 }
 
 func compare_and_save(w http.ResponseWriter, r *http.Request) {
