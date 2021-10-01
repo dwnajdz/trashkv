@@ -20,12 +20,14 @@ var (
 )
 
 func main() {
+	port := os.Getenv("PORT")
+
 	db = syncmap.Map{}
 
 	http.HandleFunc("/connect", connect)
 	http.HandleFunc("/save", compare_and_save)
 
-	http.ListenAndServe(":80", nil)
+	http.ListenAndServe(":"+port, nil)
 }
 
 func connect(w http.ResponseWriter, r *http.Request) {
