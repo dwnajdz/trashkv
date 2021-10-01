@@ -16,6 +16,7 @@ const (
 
 type Database struct {
 	PrivateKey *string
+	Url        string
 	Syncmap    syncmap.Map
 }
 
@@ -27,7 +28,7 @@ type Core interface {
 }
 
 // funcs
-func Connect() Core {
+func Connect(url string) Core {
 	// dat is used for unmarshalling database from /connect
 	// syncm is Syncmap passed in *Database
 	// core is interface which is returned
@@ -35,7 +36,7 @@ func Connect() Core {
 	var syncm syncmap.Map
 	var core Core
 
-	resp, err := http.Get("http://localhost/connect")
+	resp, err := http.Get(url)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -52,6 +53,7 @@ func Connect() Core {
 
 	resDb := &Database{
 		PrivateKey: nil,
+		Url:        url,
 		Syncmap:    syncm,
 	}
 
@@ -91,5 +93,5 @@ func (db *Database) Save() {
 		fmt.Println(err)
 	}
 
-	http.Post("http://localhost/save", "application/json", bytes.NewBuffer(j))
+	http.Post(fmt.Sprintf("%s/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
