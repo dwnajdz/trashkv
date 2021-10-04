@@ -11,12 +11,12 @@ import (
 func main() {
 	start := time.Now()
 
-	db := core.Connect("http://localhost:80")
-	for i:=0; i<100000; i++ {
+	db, _ := core.Connect("http://localhost:80")
+	for i := 0; i < 500000; i++ {
 		db.Store("k"+strconv.Itoa(i), i)
 	}
 
- 	db.Save()
+	db.Save()
 
 	elapsed := time.Since(start)
 	fmt.Println(elapsed)

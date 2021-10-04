@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/wspirrat/trashkv/core"
 	"golang.org/x/sync/syncmap"
@@ -15,11 +16,13 @@ import (
 var (
 	db     syncmap.Map
 	dbJson []byte
+	// heroku
+	port = os.Getenv("PORT")
 )
 
 // port of server
 const (
-	port        = "80"
+	//port        = "80"
 	server_name = "main"
 )
 
@@ -27,7 +30,23 @@ func main() {
 	// initialise variables
 	db = syncmap.Map{}
 
-	log.Printf("sever running on http://localhost:%s", port)
+	if _, err := os.Stat("./db.json"); !os.IsNotExist(err) {
+		res := make(map[string]interface{})
+		file, err := ioutil.ReadFile("./db.json")
+		if err != nil {
+			log.Println(err)
+		}
+
+		if err := json.Unmarshal(file, &res); err != nil {
+			log.Println(err)
+		}
+
+		for key, value := range res {
+			db.Store(key, value)
+		}
+	}
+
+	log.Printf("server running on http://localhost:%s", port)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "working")
@@ -36,6 +55,7 @@ func main() {
 	http.HandleFunc("/save", compare_and_save)
 	http.HandleFunc("/sync", sync_with_servers)
 	http.HandleFunc("/status", status)
+	http.Get(fmt.Sprintf("http://localhost:%s/sync", port))
 
 	http.ListenAndServe(":"+port, nil)
 }
@@ -65,7 +85,7 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 	// respond to the client with the error message and a 400 status code.
 	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
-		fmt.Println(err)
+		log.Println(err)
 	}
 
 	// check if request is not nil
@@ -75,6 +95,12 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 		}
 
 		db = newdb
+
+		j, err := json.Marshal(&request)
+		if err != nil {
+			log.Println(err)
+		}
+		ioutil.WriteFile("db.json", j, 0644)
 	}
 }
 
@@ -101,6 +127,7 @@ func status(w http.ResponseWriter, r *http.Request) {
 }
 
 func sync_with_servers(w http.ResponseWriter, r *http.Request) {
+	log.Println("/sync")
 	jsonf := readSeversJson()
 
 	for key, value := range jsonf {

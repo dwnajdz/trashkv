@@ -93,7 +93,7 @@ func (db *Database) Save() {
 	if err != nil {
 		fmt.Println(err)
 	}
-
+	
 	http.Post(fmt.Sprintf("%s/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
