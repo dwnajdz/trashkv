@@ -1,0 +1,4 @@
+{
+  "main": "http://localhost:80",
+  "server1": "http://localhost:4998"
+}

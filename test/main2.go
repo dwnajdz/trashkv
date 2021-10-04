@@ -10,7 +10,7 @@ import (
 func main() {
 	start := time.Now()
 
-	db := core.Connect()
+	db := core.Connect("http://localhost")
 
 	db.Store("mytext", `
 	Lorem ipsum dolor sit amet, consectetur adipiscing elit. Mauris id eros et risus mollis fringilla at non diam. Etiam nec malesuada felis. Maecenas in leo vitae augue commodo semper nec eu diam. Donec at justo velit. Ut sagittis enim sed neque vehicula scelerisque. Vestibulum sollicitudin tellus sit amet mauris vulputate, ac tempus massa feugiat. Aliquam lectus ante, aliquet vel facilisis a, mattis id mi. Suspendisse eget condimentum dolor, sit amet mattis nunc. Quisque dapibus ipsum quis ante vehicula venenatis. Mauris ac velit non augue efficitur consectetur non sit amet urna. Sed facilisis tortor vitae posuere congue. Etiam eu laoreet turpis. Sed non quam ac felis rutrum dictum. Etiam a porttitor tellus.

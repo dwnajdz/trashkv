@@ -1,31 +1,43 @@
 package main
 
 import (
-	"encoding/base64"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"net/http"
-	"os"
-	"reflect"
-	"strconv"
-	"strings"
 
 	"github.com/wspirrat/trashkv/core"
 	"golang.org/x/sync/syncmap"
 )
 
 var (
-	db syncmap.Map
+	db     syncmap.Map
+	dbJson []byte
+)
+
+// port of server
+const (
+	port        = "80"
+	server_name = "main"
 )
 
 func main() {
+	// initialise variables
 	db = syncmap.Map{}
 
+	log.Printf("sever running on http://localhost:%s", port)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprintf(w, "working")
+	})
 	http.HandleFunc("/connect", connect)
 	http.HandleFunc("/save", compare_and_save)
+	http.HandleFunc("/sync", sync_with_servers)
+	http.HandleFunc("/status", status)
 
-	http.ListenAndServe(":80", nil)
+	http.ListenAndServe(":"+port, nil)
 }
 
 func connect(w http.ResponseWriter, r *http.Request) {
@@ -39,6 +51,8 @@ func connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	dbJson = j
 
 	fmt.Fprint(w, string(j))
 }
@@ -55,7 +69,7 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// check if request is not nil
-	if len(request) > 0 {
+	if r.Method == "POST" {
 		for key, value := range request {
 			newdb.Store(key, value)
 		}
@@ -64,155 +78,83 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// file functions
-func NewKeySaveToFile(key string, value interface{}) error {
-	var backupArray []string
+func status(w http.ResponseWriter, r *http.Request) {
+	servers := readSeversJson()
 
-	// string value is encoded to base64
-	// because many text messages can contain commas
-	// and text is encoded to prevent wrong string splits
-	if reflect.TypeOf(value).String() == "string" {
-		valueInString := fmt.Sprintf("%v", value)
-		value = toBase64(valueInString)
-		// the same with []string
-	} else if reflect.TypeOf(value).String() == "[]string" {
-		switch reflect.TypeOf(value).Kind() {
-		case reflect.Slice:
-			s := reflect.ValueOf(value)
+	result := make(map[string]string)
 
-			for i := 0; i < s.Len(); i++ {
-				backupArray = append(backupArray, toBase64(s.Index(i).String()))
-				value = backupArray
+	for key, value := range servers {
+		_, err := core.Connect(value)
+		if err == nil {
+			result[key] = "active"
+		} else {
+			result[key] = "dead"
+		}
+	}
+
+	jsonRes, err := json.MarshalIndent(&result, " ", " ")
+	if err != nil {
+		log.Println(err)
+	}
+
+	fmt.Fprintf(w, string(jsonRes))
+}
+
+func sync_with_servers(w http.ResponseWriter, r *http.Request) {
+	jsonf := readSeversJson()
+
+	for key, value := range jsonf {
+		if key != server_name {
+			connectToDb, err := core.Connect(value)
+			if err != nil {
+				break
+			}
+			server_db := connectToDb.Access()
+
+			serverDataMap := make(map[string]interface{})
+			server_db.Range(func(k interface{}, v interface{}) bool {
+				serverDataMap[k.(string)] = v
+				return true
+			})
+
+			serverDbJson, err := json.Marshal(&serverDataMap)
+			if err != nil {
+				log.Println(err)
+			}
+
+			if !bytes.Equal(serverDbJson, dbJson) {
+				save(db, value)
 			}
 		}
 	}
-
-	if err := SaveHardData(key, value); err != nil {
-		return err
-	}
-
-	return nil
 }
 
-func SaveHardData(key string, value interface{}) error {
-	db_line := fmt.Sprintf("%s,%v,%s;", key, value, reflect.TypeOf(value))
-	// if DatabasePath exist
-	if _, err := os.Stat(core.DatabasePath); err == nil {
-		input, err := ioutil.ReadFile(core.DatabasePath)
-		if err != nil {
-			return err
-		}
+func save(inDatabase syncmap.Map, url string) {
+	dataMap := make(map[string]interface{})
+	inDatabase.Range(func(k interface{}, v interface{}) bool {
+		dataMap[k.(string)] = v
+		return true
+	})
 
-		lines := strings.Split(string(input), "\n")
-
-		var isFind bool
-		for i, line := range lines {
-			split := strings.Split(line, ",")
-			if split[0] == key {
-				lines[i] = db_line
-				isFind = true
-			}
-		}
-		if !isFind {
-			lines = append(lines, db_line)
-		}
-
-		output := strings.Join(lines, "\n")
-		err = ioutil.WriteFile(core.DatabasePath, []byte(output), 0644)
-		if err != nil {
-			return err
-		}
-	} else {
-		err = ioutil.WriteFile(core.DatabasePath, []byte(db_line), 0644)
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func readHardData(PrivateKey string) (syncmap.Map, error) {
-	var res syncmap.Map
-
-	if _, err := os.Stat(core.DatabasePath); err == nil {
-		input, err := ioutil.ReadFile(core.DatabasePath)
-		if err != nil {
-			return syncmap.Map{}, err
-		}
-
-		splittedInput := strings.Split(string(input), ";")
-		for _, value := range splittedInput {
-			insideData := strings.Split(value, ",")
-			if len(insideData) > 2 {
-				converted, err := ConvertDataTo(insideData[2], insideData[1])
-				if err != nil {
-					return syncmap.Map{}, err
-				}
-
-				// I am trim spacing keys here, because of empty space line in db file
-				// between keys
-				res.Store(strings.TrimSpace(insideData[0]), converted)
-			}
-		}
-	}
-
-	return res, nil
-}
-
-func delInFile(key string) {
-	input, err := ioutil.ReadFile(core.DatabasePath)
+	j, err := json.Marshal(&dataMap)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	lines := strings.Split(string(input), "\n")
-
-	for i, line := range lines {
-		split := strings.Split(line, ",")
-		if split[0] == key {
-			lines[i] = ""
-		}
-	}
+	http.Post(fmt.Sprintf("%s/save", url), "application/json", bytes.NewBuffer(j))
 }
 
-func ConvertDataTo(what, value string) (interface{}, error) {
-	what = strings.TrimSpace(what)
+func readSeversJson() map[string]string {
+	var res map[string]string
 
-	if what == "string" {
-		return base64ToString(value), nil
-	} else if what == "int" {
-		intVar, err := strconv.Atoi(value)
-		return intVar, err
-	} else if what == "byte" {
-		return []byte(value), nil
-	} else if what == "[]string" {
-		value = strings.Trim(value, "[ ]")
-		split := strings.Split(value, " ")
-		for index, val := range split {
-			split[index] = base64ToString(strings.TrimSpace(val))
-		}
-		return split, nil
-	} else if what == "bool" {
-		boolType, err := strconv.ParseBool(value)
-		return boolType, err
-	}
-
-	return value, nil
-}
-
-// utils
-func toBase64(value string) string {
-	return base64.StdEncoding.EncodeToString(
-		[]byte(value),
-	)
-}
-
-func base64ToString(value string) string {
-	res, err := base64.StdEncoding.DecodeString(value)
+	file, err := ioutil.ReadFile("./servers.json")
 	if err != nil {
-		fmt.Println(err)
-		return "[error]"
+		log.Println(err)
 	}
-	return string(res)
+
+	if err := json.Unmarshal(file, &res); err != nil {
+		log.Println(err)
+	}
+
+	return res
 }
