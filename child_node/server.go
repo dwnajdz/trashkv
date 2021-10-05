@@ -9,29 +9,24 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/wspirrat/trashkv/core"
 	"golang.org/x/sync/syncmap"
 )
 
 var (
-	db     syncmap.Map
-	dbJson []byte
+	db syncmap.Map
 	//heroku
 	//port = os.Getenv("PORT")
 )
 
 // port of server
 const (
-	port        = "80"
-	server_name = "main"
-)
+	port        = "4990"
+	server_name = "server1"
+	// pass main server url here
+	main_url = "http://localhost:80"
 
-// SAVE_IN_JSON as said its save your database in ./db.json
-// if SAVE_IN_JSON is enabled all your data will not be lost
-// and restored when server will be started
-//
-// if you have disable it all your data when server will stop will be gone
-const SAVE_IN_JSON = false
+	SAVE_IN_JSON = false
+)
 
 func main() {
 	// initialise variables
@@ -62,10 +57,9 @@ func main() {
 	})
 	http.HandleFunc("/connect", connect)
 	http.HandleFunc("/save", compare_and_save)
+	http.HandleFunc("/sync/save", sync_save)
 	http.HandleFunc("/sync", sync_with_servers)
-	http.HandleFunc("/status", status)
-	http.HandleFunc("/servers.json", servers_json)
-	http.Get(fmt.Sprintf("http://localhost:%s/sync", port))
+	http.PostForm(fmt.Sprintf("http://localhost:%s/sync", port), nil)
 
 	http.ListenAndServe(":"+port, nil)
 }
@@ -82,14 +76,14 @@ func connect(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 	}
 
-	dbJson = j
-
 	fmt.Fprint(w, string(j))
 }
 
 func compare_and_save(w http.ResponseWriter, r *http.Request) {
 	var request map[string]interface{}
 	var newdb syncmap.Map
+
+	log.Println("/save")
 
 	// Try to decode the request body into the struct. If there is an error,
 	// respond to the client with the error message and a 400 status code.
@@ -119,33 +113,63 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func status(w http.ResponseWriter, r *http.Request) {
-	servers := readSeversJson()
-	result := make(map[string]string)
+// sync save is route for handling sync request
+// from other servers
+// why?
+// without this route main server will send request to /save path
+// and create infinite loop, because servers will send each other post requests
+//
+// maybe its some other solution without need to create new route 
+// but i dont know it
+func sync_save(w http.ResponseWriter, r *http.Request) {
+	var request map[string]interface{}
+	var newdb syncmap.Map
 
-	for key, value := range servers {
-		_, err := core.Connect(value)
-		if err == nil {
-			result[key] = "active"
-		} else {
-			result[key] = "dead"
-		}
-	}
+	log.Println("/save")
 
-	jsonRes, err := json.MarshalIndent(&result, " ", " ")
+	// Try to decode the request body into the struct. If there is an error,
+	// respond to the client with the error message and a 400 status code.
+	err := json.NewDecoder(r.Body).Decode(&request)
 	if err != nil {
 		log.Println(err)
 	}
 
-	fmt.Fprintf(w, string(jsonRes))
+	// check if request is not nil
+	if r.Method == "POST" {
+		for key, value := range request {
+			newdb.Store(key, value)
+		}
+
+		db = newdb
+
+		if SAVE_IN_JSON {
+			j, err := json.Marshal(&request)
+			if err != nil {
+				log.Println(err)
+			}
+			ioutil.WriteFile("db.json", j, 0644)
+		}
+	}
 }
 
 func sync_with_servers(w http.ResponseWriter, r *http.Request) {
-	log.Println("/sync")
-	if r.Method == "POST" {
-		log.Println("/sync request")
-		jsonf := readSeversJson()
+	var jsonf map[string]string
 
+	log.Println("/sync")
+	resp, err := http.Get(fmt.Sprintf("%s/servers.json", main_url))
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	defer resp.Body.Close()
+
+	body, _ := ioutil.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &jsonf); err != nil {
+		log.Println(err)
+	}
+
+	if r.Method == "POST" {
 		for key, value := range jsonf {
 			if key != server_name {
 				save(db, value)
@@ -166,29 +190,5 @@ func save(inDatabase syncmap.Map, url string) {
 		fmt.Println(err)
 	}
 
-	http.Post(fmt.Sprintf("%s/sync/save", url), "application/json", bytes.NewBuffer(j))
-}
-
-func servers_json(w http.ResponseWriter, r *http.Request) {
-	file, err := ioutil.ReadFile("./servers.json")
-	if err != nil {
-		log.Println(err)
-	}
-
-	fmt.Fprint(w, string(file))
-}
-
-func readSeversJson() map[string]string {
-	var res map[string]string
-
-	file, err := ioutil.ReadFile("./servers.json")
-	if err != nil {
-		log.Println(err)
-	}
-
-	if err := json.Unmarshal(file, &res); err != nil {
-		log.Println(err)
-	}
-
-	return res
+	http.Post(fmt.Sprintf("%s/save", url), "application/json", bytes.NewBuffer(j))
 }

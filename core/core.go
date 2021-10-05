@@ -25,7 +25,6 @@ type Core interface {
 	Delete(key string)
 	Load(key string) interface{}
 	Save()
-	Access() syncmap.Map
 }
 
 // funcs
