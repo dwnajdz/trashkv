@@ -16,13 +16,13 @@ import (
 var (
 	db     syncmap.Map
 	dbJson []byte
-	// heroku
-	port = os.Getenv("PORT")
+	//heroku
+	//port = os.Getenv("PORT")
 )
 
 // port of server
 const (
-	//port        = "80"
+	port        = "80"
 	server_name = "main"
 )
 
