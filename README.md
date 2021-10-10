@@ -69,10 +69,15 @@
     
     ```go 
     import 	(
+      "fmt"
+    
       "github.com/wspirrat/trashkv/core"
     )
 
-    db := core.Connect("http://localhost:80")
+    db, err := core.Connect("http://localhost:80")
+    if err != nil {
+      fmt.Println(err)
+    }
 
     // custom url connect
     db = core.Connect("https://urltomypagewithtrashkv.com")
@@ -94,7 +99,7 @@
 
     func main() {
       // connecting to db
-      db := core.Connect("http://localhost:80")
+      db, _ := core.Connect("http://localhost:80")
 
       // storing string
       db.Store("mystring", "hello")
@@ -148,7 +153,7 @@
 
   func main() {
     // connecting to db
-    db := core.Connect("http://localhost:80")
+    db, _ := core.Connect("http://localhost:80")
 
     db.Store("mystring", "hello")
     mystring := db.Load("mystring")
