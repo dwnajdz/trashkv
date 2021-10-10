@@ -58,6 +58,8 @@
       SAVE_CACHE = true
     )
     ```
+  4. Run server
+    ``` go run main.go ```
 
 ## Usage
 
@@ -162,8 +164,7 @@
       123000.345,
     })
     // ACCESSING STRUCT
-    var john person
-    john = db.Load("John")
+  	john := db.Load("John").(person)
     fmt.Println(john.Bank)
     // result: 123000.345
 
