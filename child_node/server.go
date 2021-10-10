@@ -55,11 +55,11 @@ func main() {
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, "working")
 	})
-	http.HandleFunc("/connect", connect)
-	http.HandleFunc("/save", compare_and_save)
-	http.HandleFunc("/sync/save", sync_save)
-	http.HandleFunc("/sync", sync_with_servers)
-	http.PostForm(fmt.Sprintf("http://localhost:%s/sync", port), nil)
+	http.HandleFunc("/tkv_v1/connect", connect)
+	http.HandleFunc("/tkv_v1/save", compare_and_save)
+	http.HandleFunc("/tkv_v1/sync/save", sync_save)
+	http.HandleFunc("/tkv_v1/sync", sync_with_servers)
+	http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", port), nil)
 
 	http.ListenAndServe(":"+port, nil)
 }
@@ -119,8 +119,8 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 // without this route main server will send request to /save path
 // and create infinite loop, because servers will send each other post requests
 //
-// maybe its some other solution without need to create new route 
-// but i dont know it
+// maybe there is some other solution without need to create new route 
+// but that's good for now
 func sync_save(w http.ResponseWriter, r *http.Request) {
 	var request map[string]interface{}
 	var newdb syncmap.Map

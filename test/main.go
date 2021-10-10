@@ -11,7 +11,7 @@ import (
 func main() {
 	start := time.Now()
 
-	db, _ := core.Connect("http://localhost:4990")
+	db, _ := core.Connect("http://localhost:80")
 	for i := 0; i < 500000; i++ {
 		db.Store("k"+strconv.Itoa(i), i)
 	}

@@ -14,33 +14,44 @@ import (
 )
 
 var (
-	db     syncmap.Map
-	dbJson []byte
-	//heroku
-	//port = os.Getenv("PORT")
+	// global database variable
+	tkvdb syncmap.Map
+	// NODE_0 is name of first server
+	// used in 153 line in sync_with_servers() function
+	NODE_0 = "node"
+	// declare servers and child servers names
+	// !!!
+	// always declare current server name first
+	SERVERS_JSON = map[string]string{
+		"node": fmt.Sprintf("http://localhost:%s", port),
+		// example of second server
+		//"child1": fmt.Sprintf("http://localhost:8894",),
+	}
+	SERVERS_JSON_PATH = "./servers.json"
 )
 
-// port of server
 const (
-	port        = "80"
-	server_name = "main"
-)
+	// port of server
+	// you can set it to whatever port you want
+	port = "80"
 
-// SAVE_IN_JSON as said its save your database in ./db.json
-// if SAVE_IN_JSON is enabled all your data will not be lost
-// and restored when server will be started
-//
-// if you have disable it all your data when server will stop will be gone
-const SAVE_IN_JSON = false
+	CACHE_PATH = "./cache.json"
+	// SAVE_IN_JSON as said its save your database in ./cache.json
+	// if SAVE_IN_JSON is enabled all your data will not be lost
+	// and restored when server will be started
+	//
+	// if you have disable it all your data when server will stop will be gone
+	SAVE_IN_JSON = true
+)
 
 func main() {
 	// initialise variables
-	db = syncmap.Map{}
+	tkvdb = syncmap.Map{}
 
 	if SAVE_IN_JSON {
-		if _, err := os.Stat("./db.json"); !os.IsNotExist(err) {
+		if _, err := os.Stat(CACHE_PATH); !os.IsNotExist(err) {
 			res := make(map[string]interface{})
-			file, err := ioutil.ReadFile("./db.json")
+			file, err := ioutil.ReadFile(CACHE_PATH)
 			if err != nil {
 				log.Println(err)
 			}
@@ -50,29 +61,24 @@ func main() {
 			}
 
 			for key, value := range res {
-				db.Store(key, value)
+				tkvdb.Store(key, value)
 			}
 		}
 	}
 
-	log.Printf("server running on http://localhost:%s", port)
-
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		fmt.Fprintf(w, "working")
-	})
-	http.HandleFunc("/connect", connect)
-	http.HandleFunc("/save", compare_and_save)
-	http.HandleFunc("/sync", sync_with_servers)
-	http.HandleFunc("/status", status)
-	http.HandleFunc("/servers.json", servers_json)
-	http.Get(fmt.Sprintf("http://localhost:%s/sync", port))
+	http.HandleFunc("/tkv_v1/connect", connect)
+	http.HandleFunc("/tkv_v1/save", compare_and_save)
+	http.HandleFunc("/tkv_v1/sync", sync_with_servers)
+	http.HandleFunc("/tkv_v1/status", status)
+	http.HandleFunc("/tkv_v1/servers.json", servers_json)
+	http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", port), nil)
 
 	http.ListenAndServe(":"+port, nil)
 }
 
 func connect(w http.ResponseWriter, r *http.Request) {
 	dataMap := make(map[string]interface{})
-	db.Range(func(k interface{}, v interface{}) bool {
+	tkvdb.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
 		return true
 	})
@@ -81,8 +87,6 @@ func connect(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		fmt.Println(err)
 	}
-
-	dbJson = j
 
 	fmt.Fprint(w, string(j))
 }
@@ -104,23 +108,23 @@ func compare_and_save(w http.ResponseWriter, r *http.Request) {
 			newdb.Store(key, value)
 		}
 
-		db = newdb
+		tkvdb = newdb
 
 		// send request to all servers be synced
-		http.PostForm(fmt.Sprintf("http://localhost:%s/sync", port), nil)
+		http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", port), nil)
 
 		if SAVE_IN_JSON {
 			j, err := json.Marshal(&request)
 			if err != nil {
 				log.Println(err)
 			}
-			ioutil.WriteFile("db.json", j, 0644)
+			ioutil.WriteFile(CACHE_PATH, j, 0644)
 		}
 	}
 }
 
 func status(w http.ResponseWriter, r *http.Request) {
-	servers := readSeversJson()
+	servers := core.ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
 	result := make(map[string]string)
 
 	for key, value := range servers {
@@ -141,14 +145,13 @@ func status(w http.ResponseWriter, r *http.Request) {
 }
 
 func sync_with_servers(w http.ResponseWriter, r *http.Request) {
-	log.Println("/sync")
 	if r.Method == "POST" {
 		log.Println("/sync request")
-		jsonf := readSeversJson()
+		jsonf := core.ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
 
 		for key, value := range jsonf {
-			if key != server_name {
-				save(db, value)
+			if key != NODE_0 {
+				save(tkvdb, value)
 			}
 		}
 	}
@@ -166,29 +169,14 @@ func save(inDatabase syncmap.Map, url string) {
 		fmt.Println(err)
 	}
 
-	http.Post(fmt.Sprintf("%s/sync/save", url), "application/json", bytes.NewBuffer(j))
+	http.Post(fmt.Sprintf("%s/tkv_v1/sync/save", url), "application/json", bytes.NewBuffer(j))
 }
 
 func servers_json(w http.ResponseWriter, r *http.Request) {
-	file, err := ioutil.ReadFile("./servers.json")
+	file, err := ioutil.ReadFile(SERVERS_JSON_PATH)
 	if err != nil {
 		log.Println(err)
 	}
 
 	fmt.Fprint(w, string(file))
-}
-
-func readSeversJson() map[string]string {
-	var res map[string]string
-
-	file, err := ioutil.ReadFile("./servers.json")
-	if err != nil {
-		log.Println(err)
-	}
-
-	if err := json.Unmarshal(file, &res); err != nil {
-		log.Println(err)
-	}
-
-	return res
 }

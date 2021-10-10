@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"os"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -36,7 +37,7 @@ func Connect(url string) (Core, error) {
 	var syncm syncmap.Map
 	var core Core
 
-	resp, err := http.Get(fmt.Sprintf("%s/connect", url))
+	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect", url))
 	if err != nil {
 		return nil, err
 	}
@@ -92,10 +93,32 @@ func (db *Database) Save() {
 	if err != nil {
 		fmt.Println(err)
 	}
-	
-	http.Post(fmt.Sprintf("%s/save", db.Url), "application/json", bytes.NewBuffer(j))
+
+	http.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
 func (db *Database) Access() syncmap.Map {
 	return db.Syncmap
+}
+
+// json function
+func ReadSeversJson(path string, servers map[string]string) map[string]string {
+	var res map[string]string
+
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		file, err := ioutil.ReadFile(path)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if err := json.Unmarshal(file, &res); err != nil {
+			fmt.Println(err)
+		}
+
+		return res
+	} else {
+		file, _ := json.MarshalIndent(servers, "", " ")
+		_ = ioutil.WriteFile("test.json", file, 0644)
+	}
+	return nil
 }
