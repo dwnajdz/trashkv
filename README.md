@@ -27,7 +27,7 @@
     ```
 
 3. Configure. 
-    All configue options avaliable in [server.go](https://github.com/wspirrat/trashkv/blob/master/core/core.go)
+    All configue options avaliable in [server.go](https://github.com/wspirrat/trashkv/blob/master/core/server.go)
     ```go
     // config
     var (
