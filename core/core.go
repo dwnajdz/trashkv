@@ -118,7 +118,7 @@ func ReadSeversJson(path string, servers map[string]string) map[string]string {
 		return res
 	} else {
 		file, _ := json.MarshalIndent(servers, "", " ")
-		_ = ioutil.WriteFile("test.json", file, 0644)
+		_ = ioutil.WriteFile(SERVERS_JSON_PATH, file, 0644)
 	}
 	return nil
 }

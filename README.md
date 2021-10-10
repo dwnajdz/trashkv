@@ -10,171 +10,200 @@
 
 ## Installing
 
-* Own files option
-  1. Firstly install core of trashkv
-    ``` go get github.com/wspirrat/traskhv_core ```
+1. Firstly install trashkv.
+  ``` go get github.com/wspirrat/traskhv ```
 
-  2. Create **tkv_server.go** file in your project
-  3. Paste this into **tkv_server.go** file
-  ```go
-  package main
+2. Next paste this into your file with all http routes.
+    Remember to change yourport to whatever port you are using right now.
+    ```go
+      http.HandleFunc("/tkv_v1/connect", core.TkvRouteConnect)
+      http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
+      http.HandleFunc("/tkv_v1/sync", core.TkvRouteSyncWithServers)
+      http.HandleFunc("/tkv_v1/status", core.TkvRouteStatus)
+      http.HandleFunc("/tkv_v1/servers.json", core.TkvRouteServersJson)
+      http.PostForm("http://localhost:80/tkv_v1/sync"), nil)
+      // alternative with custom port 
+      // import "fmt"
+      // http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", yourport), nil)
+    ```
 
-  import (
-    "bytes"
-    "encoding/json"
-    "fmt"
-    "io/ioutil"
-    "log"
-    "net/http"
-
-    "github.com/wspirrat/trashkv/core"
-    "golang.org/x/sync/syncmap"
-  )
-
-  var (
-    // global database variable
-    tkvdb syncmap.Map
-    // NODE_0 is name of first server
-    // used in 153 line in sync_with_servers() function
-    NODE_0 = "node0"
-    // declare servers and child servers names
-    // !!!
-    // always declare current server name first
-    SERVERS_JSON = map[string]string{
-      "node": fmt.Sprintf("http://localhost:%s", port),
-      // example of second server
-      //"child1": fmt.Sprintf("http://localhost:8894",),
-    }
-    SERVERS_JSON_PATH = "./servers.json"
-  )
-
-  const (
-    CACHE_PATH = "./cache.json"
-    // SAVE_IN_JSON as said its save your database in ./cache.json
-    // if SAVE_IN_JSON is enabled all your data will not be lost
-    // and restored when server will be started
-    //
-    // if you have disable it all your data when server will stop will be gone
-    SAVE_IN_JSON = true
-  )
-
-  func connect(w http.ResponseWriter, r *http.Request) {
-    dataMap := make(map[string]interface{})
-    tkvdb.Range(func(k interface{}, v interface{}) bool {
-      dataMap[k.(string)] = v
-      return true
-    })
-
-    j, err := json.Marshal(&dataMap)
-    if err != nil {
-      fmt.Println(err)
-    }
-
-    fmt.Fprint(w, string(j))
-  }
-
-  func compare_and_save(w http.ResponseWriter, r *http.Request) {
-    var request map[string]interface{}
-    var newdb syncmap.Map
-
-    // Try to decode the request body into the struct. If there is an error,
-    // respond to the client with the error message and a 400 status code.
-    err := json.NewDecoder(r.Body).Decode(&request)
-    if err != nil {
-      log.Println(err)
-    }
-
-    // check if request is not nil
-    if r.Method == "POST" {
-      for key, value := range request {
-        newdb.Store(key, value)
+3. Configure 
+    All configue options avaliable in [server.go]()
+    ```go
+    // config
+    var (
+      // used in 119 line in sync_with_servers() function
+      // It is optional you can leave it blank
+      SERVER_NAME = "node0"
+      // declare servers and child servers names
+      // !!!
+      // always declare current server name first
+      SERVERS_JSON = map[string]string{
+        "node": fmt.Sprintf("http://localhost:%s", PORT),
+        // example of second server
+        //"child1": fmt.Sprintf("http://localhost:8894",),
       }
+      SERVERS_JSON_PATH = "./servers.json"
+      
+      // port of server
+      // you can set it to whatever port you are using
+      PORT = "80"
 
-      tkvdb = newdb
+      CACHE_PATH = "./cache.json"
+      // SAVE_IN_JSON as said it is saving your database in ./cache.json
+      // if SAVE_IN_JSON is enabled all your data will not be lost
+      // and restored when server will be started
+      //
+      // if you have disable it all your data when server will stop will be gone
+      SAVE_CACHE = true
+    )
+    ```
 
-      // send request to all servers be synced
-      http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", port), nil)
-
-      if SAVE_IN_JSON {
-        j, err := json.Marshal(&request)
-        if err != nil {
-          log.Println(err)
-        }
-        ioutil.WriteFile(CACHE_PATH, j, 0644)
-      }
-    }
-  }
-
-  func status(w http.ResponseWriter, r *http.Request) {
-    servers := core.ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
-    result := make(map[string]string)
-
-    for key, value := range servers {
-      _, err := core.Connect(value)
-      if err == nil {
-        result[key] = "active"
-      } else {
-        result[key] = "dead"
-      }
-    }
-
-    jsonRes, err := json.MarshalIndent(&result, " ", " ")
-    if err != nil {
-      log.Println(err)
-    }
-
-    fmt.Fprintf(w, string(jsonRes))
-  }
-
-  func sync_with_servers(w http.ResponseWriter, r *http.Request) {
-    if r.Method == "POST" {
-      log.Println("/sync request")
-      jsonf := core.ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
-
-      for key, value := range jsonf {
-        if key != NODE_0 {
-          save(tkvdb, value)
-        }
-      }
-    }
-  }
-
-  func save(inDatabase syncmap.Map, url string) {
-    dataMap := make(map[string]interface{})
-    inDatabase.Range(func(k interface{}, v interface{}) bool {
-      dataMap[k.(string)] = v
-      return true
-    })
-
-    j, err := json.Marshal(&dataMap)
-    if err != nil {
-      fmt.Println(err)
-    }
-
-    http.Post(fmt.Sprintf("%s/tkv_v1/sync/save", url), "application/json", bytes.NewBuffer(j))
-  }
-
-  func servers_json(w http.ResponseWriter, r *http.Request) {
-    file, err := ioutil.ReadFile(SERVERS_JSON_PATH)
-    if err != nil {
-      log.Println(err)
-    }
-
-    fmt.Fprint(w, string(file))
-  }
-  ```
 ## Usage
 
 1. **Connect to database server**
-  <p> To connect you just pass url for server into function and assign database variable to it.</p>
+    <p> To connect you just pass url for server into function and assign database variable to it.</p>
 
-  ```go 
+    ***Warning***: Pass url without ```/tkv_v1/connect```. Only link to your application
+    
+    ```go 
+    import 	(
+      "github.com/wspirrat/trashkv/core"
+    )
+
+    db := core.Connect("http://localhost:80")
+
+    // custom url connect
+    db = core.Connect("https://urltomypagewithtrashkv.com")
+    ```
+
+2. **Store key in database**
+    <p> Storing is very easy. You just pass in first argue your key name. In second argue just pass value of that key. </p>
+
+    <p> TrashKv accepts all types of variables in golang. </p>
+
+    ***Important***: *When key already exist in database it is replaced with the new* 
+
+    ***Warning***: *All keys must be strings*
+
+    ```go
+    import 	(
+        "github.com/wspirrat/trashkv/core"
+    )
+
+    func main() {
+      // connecting to db
+      db := core.Connect("http://localhost:80")
+
+      // storing string
+      db.Store("mystring", "hello")
+
+      // storing int
+      db.Store("int", 1)
+
+      // storing array
+      db.Store("array", []string{"hello im array"})
+
+      // storing byte
+      db.Store("byte", []byte("hello im array")
+
+      // storing struct
+      type person struct {
+        Name string
+        Age int
+        Childrens []string
+        IsMarried bool
+        Bank float64
+      }
+      db.Store("John", person{
+        "John",
+        102,
+        []string{"John2"},
+        true,
+        123000.345,
+      })
+
+      db.Save()
+    }
+    ```
+
+3. **Loading keys / getting keys**
+  <p> To load key you just pass in first argue it's name.</p>
+  
+  ```go
   import 	(
-    core "github.com/wspirrat/trashkv_core"
+    "fmt"
+
+    "github.com/wspirrat/trashkv/core"
   )
 
-  db := core.Connect("http://localhost:80")
+  type person struct {
+    Name string
+    Age int
+    Childrens []string
+    IsMarried bool
+    Bank float64
+  }
+
+  func main() {
+    // connecting to db
+    db := core.Connect("http://localhost:80")
+
+    db.Store("mystring", "hello")
+    mystring := db.Load("mystring")
+    fmt.Println(mystring)
+    // result: hello
+
+    db.Store("John", person{
+      "John",
+      102,
+      []string{"John2"},
+      true,
+      123000.345,
+    })
+    // ACCESSING STRUCT
+    var john person
+    john = db.Load("John")
+    fmt.Println(john.Bank)
+    // result: 123000.345
+
+    db.Save()
+  }
   ```
 
+4. **Deleting keys**
+  <p> To delete key just pass it's name. </p>
 
-## Third Example
+  ```go
+  import "github.com/wspirrat/trashkv/core"
+
+  func main() {
+    // connecting to db
+    db := core.Connect("http://localhost:80")
+
+    db.Store("mystring", "hello")
+    db.Delete("mystring")
+    // done
+
+    db.Save()
+  }
+  ```
+
+5. **Save**
+  Always remember to save your database after ```store/delete``` functions.
+
+  ```go
+  // To do that you just need to pass (*Database).Save() function
+
+  import "github.com/wspirrat/trashkv/core"
+
+  func main() {
+    // connecting to db
+    db := core.Connect("http://localhost:80")
+    db.Store("mystring", "hello")
+
+    db.Save()
+  }
+  ```
+## License
+[MIT](https://choosealicense.com/licenses/mit/)
