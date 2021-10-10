@@ -26,8 +26,8 @@
       // http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", yourport), nil)
     ```
 
-3. Configure 
-    All configue options avaliable in [server.go]()
+3. Configure. 
+    All configue options avaliable in [server.go](https://github.com/wspirrat/trashkv/blob/master/core/core.go)
     ```go
     // config
     var (
