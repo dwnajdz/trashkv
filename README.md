@@ -14,7 +14,6 @@
   ``` go get github.com/wspirrat/traskhv ```
 
 2. Next paste this into your file with all http routes.
-    Remember to change yourport to whatever port you are using right now.
     ```go
       http.HandleFunc("/tkv_v1/connect", core.TkvRouteConnect)
       http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
@@ -190,7 +189,7 @@
   ```
 
 5. **Save**
-  Always remember to save your database after ```store/delete``` functions.
+  <p> Always remember to save your database after *store/delete* functions. </p>
 
   ```go
   // To do that you just need to pass (*Database).Save() function
