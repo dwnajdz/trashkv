@@ -11,7 +11,7 @@
 ## Installing
 
 1. Firstly install trashkv.
-  ``` go get github.com/wspirrat/traskhv ```
+  ``` go get github.com/wspirrat/trashkv ```
 
 2. Next paste this into your file with all http routes.
     ```go
