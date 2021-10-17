@@ -24,7 +24,7 @@ type Database struct {
 type Core interface {
 	Store(key string, value interface{})
 	Delete(key string)
-	Load(key string) interface{}
+	Load(key string) (interface{}, bool)
 	Save()
 }
 
@@ -70,13 +70,17 @@ func (db *Database) Delete(key string) {
 	db.Syncmap.Delete(key)
 }
 
-func (db *Database) Load(key string) interface{} {
-	result, ok := db.Syncmap.Load(key)
-	if ok {
-		return result
+// returns value
+// and bool
+// if object exist returns true
+// else if object do not exist returns false
+func (db *Database) Load(key string) (value interface{}, exist bool) {
+	result, exist := db.Syncmap.Load(key)
+	if exist {
+		return result, true
 	}
 
-	return "this value does not exist in map"
+	return nil, false
 }
 
 // save function send request to server
