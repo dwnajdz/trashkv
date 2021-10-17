@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"net/http"
 	"os"
+	"context"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -25,7 +26,7 @@ type Core interface {
 	Store(key string, value interface{})
 	Delete(key string)
 	Load(key string) (interface{}, bool)
-	Save()
+	Save(ctx context.Context)
 }
 
 // funcs
@@ -86,7 +87,7 @@ func (db *Database) Load(key string) (value interface{}, exist bool) {
 // save function send request to server
 // server compare and set var db *Database
 // as database send in json request
-func (db *Database) Save() {
+func (db *Database) Save(ctx context.Context) {
 	dataMap := make(map[string]interface{})
 	db.Syncmap.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
@@ -98,7 +99,8 @@ func (db *Database) Save() {
 		fmt.Println(err)
 	}
 
-	http.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
+	req, err := http.NewRequest("POST",fmt.Sprintf("%s/tkv_v1/save", db.Url), bytes.NewBuffer(j))
+	req = req.WithContext(ctx)
 }
 
 func (db *Database) Access() syncmap.Map {
