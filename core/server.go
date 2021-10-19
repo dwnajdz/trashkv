@@ -14,6 +14,8 @@ import (
 
 // global database variable
 var tkvdb syncmap.Map
+// private key for server
+var global_private_key []byte
 
 // config
 var (
@@ -73,7 +75,16 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 	}
 
-	fmt.Fprint(w, string(j))
+	if global_private_key == nil {
+		fmt.Fprint(w, string(j))
+	} else {
+		txt, err := encrypt(global_private_key, string(j))
+		if err != nil {
+			log.Println(err)
+		}
+
+		fmt.Fprint(w, txt)
+	}
 }
 
 func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
@@ -113,7 +124,7 @@ func TkvRouteStatus(w http.ResponseWriter, r *http.Request) {
 	result := make(map[string]string)
 
 	for key, value := range servers {
-		_, err := Connect(value)
+		_, err := Connect(value, "")
 		if err == nil {
 			result[key] = "active"
 		} else {

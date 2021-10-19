@@ -2,12 +2,12 @@ package core
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"context"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -17,7 +17,7 @@ const (
 )
 
 type Database struct {
-	PrivateKey *string
+	PrivateKey *[]byte
 	Url        string
 	Syncmap    syncmap.Map
 }
@@ -30,7 +30,7 @@ type Core interface {
 }
 
 // funcs
-func Connect(url string) (Core, error) {
+func Connect(url, privateKey string) (Core, error) {
 	// dat is used for unmarshalling database from /connect
 	// syncm is Syncmap passed in *Database
 	// core is interface which is returned
@@ -44,8 +44,20 @@ func Connect(url string) (Core, error) {
 	}
 
 	body, _ := ioutil.ReadAll(resp.Body)
-	if err := json.Unmarshal(body, &dat); err != nil {
-		return nil, err
+
+	if global_private_key == nil {
+		if err := json.Unmarshal([]byte(body), &dat); err != nil {
+			return nil, err
+		}
+	} else {
+		txt, err := decrypt([]byte(privateKey), string(body))
+		if err != nil {
+			return nil, err
+		}
+		// unmarshal decrypted text
+		if err := json.Unmarshal([]byte(txt), &dat); err != nil {
+			return nil, err
+		}
 	}
 
 	// add all keys from dat to syncm
@@ -53,13 +65,15 @@ func Connect(url string) (Core, error) {
 		syncm.Store(key, value)
 	}
 
+	dbpk := []byte(privateKey)
 	resDb := &Database{
-		PrivateKey: nil,
+		PrivateKey: &dbpk,
 		Url:        url,
 		Syncmap:    syncm,
 	}
 
 	core = resDb
+
 	return core, nil
 }
 
@@ -99,8 +113,7 @@ func (db *Database) Save(ctx context.Context) {
 		fmt.Println(err)
 	}
 
-	req, err := http.NewRequest("POST",fmt.Sprintf("%s/tkv_v1/save", db.Url), bytes.NewBuffer(j))
-	req = req.WithContext(ctx)
+	http.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
 func (db *Database) Access() syncmap.Map {

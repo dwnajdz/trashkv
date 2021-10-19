@@ -1,8 +1,8 @@
 package main
 
 import (
-	//"fmt"
-	"io/ioutil"
+	"context"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -10,28 +10,21 @@ import (
 )
 
 func main() {
+	ctx := context.Background()
+	ctx, _ = context.WithTimeout(ctx, 3*time.Second)
+
 	start := time.Now()
 
-	db, _ := core.Connect("http://localhost:80")
-	for i := 0; i < 500000; i+=10 {
+	db, err := core.Connect("http://localhost:80", "mykey")
+	if err != nil {
+		fmt.Println(err)
+	}
+	for i := 0; i < 500000; i++ {
 		db.Store("k"+strconv.Itoa(i), i)
 	}
 
-	db.Save()
+	db.Save(ctx)
+
 	elapsed := time.Since(start)
-
-	b, err := ioutil.ReadFile("output.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	b_ctx := string(b) + elapsed.String() + ","
-
-	// write the whole body at once
-	err = ioutil.WriteFile("output.txt", []byte(b_ctx), 0644)
-	if err != nil {
-		panic(err)
-	}
-
-	//fmt.Println(elapsed)
+	fmt.Println(elapsed)
 }
