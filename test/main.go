@@ -1,37 +1,40 @@
 package main
 
 import (
-	//"fmt"
-	"io/ioutil"
+	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/wspirrat/trashkv/core"
 )
 
+type db_save struct {
+	id     int
+	name   string
+	idname string
+}
+
 func main() {
 	start := time.Now()
+	core.REPLACE_KEY = true
 
-	db, _ := core.Connect("http://localhost:80")
-	for i := 0; i < 500000; i+=10 {
-		db.Store("k"+strconv.Itoa(i), i)
+	db, err := core.Connect("http://localhost:80", "hello")
+	if err != nil {
+		fmt.Println(err)
+	}
+	for i := 0; i < 501; i++ {
+		save := db_save{
+			id:     i,
+			name:   "k" + strconv.Itoa(i),
+			idname: strconv.Itoa(i),
+		}
+		db.Store("k"+strconv.Itoa(i), save)
 	}
 
 	db.Save()
+	db.Store("k500", "changed :(")
+	answer, exist := db.Load("k500")
+	fmt.Println(answer, ",", exist)
 	elapsed := time.Since(start)
-
-	b, err := ioutil.ReadFile("output.txt")
-	if err != nil {
-		panic(err)
-	}
-
-	b_ctx := string(b) + elapsed.String() + ","
-
-	// write the whole body at once
-	err = ioutil.WriteFile("output.txt", []byte(b_ctx), 0644)
-	if err != nil {
-		panic(err)
-	}
-
-	//fmt.Println(elapsed)
+	fmt.Println(elapsed)
 }

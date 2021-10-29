@@ -3,11 +3,12 @@ package core
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
-	"context"
+	"time"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -17,7 +18,7 @@ const (
 )
 
 type Database struct {
-	PrivateKey *string
+	PrivateKey *[]byte
 	Url        string
 	Syncmap    syncmap.Map
 }
@@ -26,11 +27,21 @@ type Core interface {
 	Store(key string, value interface{})
 	Delete(key string)
 	Load(key string) (interface{}, bool)
-	Save(ctx context.Context)
+	Save()
 }
 
+// req = request
+// request server save
+type reqServerSave struct {
+	AuthKey    *string
+	Cache      *map[string]interface{}
+	PrivateKey *[]byte
+}
+
+var client *http.Client
+
 // funcs
-func Connect(url string) (Core, error) {
+func Connect(url, privateKey string) (Core, error) {
 	// dat is used for unmarshalling database from /connect
 	// syncm is Syncmap passed in *Database
 	// core is interface which is returned
@@ -44,8 +55,20 @@ func Connect(url string) (Core, error) {
 	}
 
 	body, _ := ioutil.ReadAll(resp.Body)
-	if err := json.Unmarshal(body, &dat); err != nil {
-		return nil, err
+
+	if len(body) <= 2 {
+		if err := json.Unmarshal([]byte(body), &dat); err != nil {
+			return nil, err
+		}
+	} else {
+		txt, err := decrypt([]byte(privateKey), string(body))
+		if err != nil {
+			return nil, errors.New("private key is wrong")
+		}
+		// unmarshal decrypted text
+		if err := json.Unmarshal([]byte(txt), &dat); err != nil {
+			return nil, errors.New("private key is wrong")
+		}
 	}
 
 	// add all keys from dat to syncm
@@ -53,18 +76,29 @@ func Connect(url string) (Core, error) {
 		syncm.Store(key, value)
 	}
 
+	dbpk := []byte(privateKey)
 	resDb := &Database{
-		PrivateKey: nil,
+		PrivateKey: &dbpk,
 		Url:        url,
 		Syncmap:    syncm,
 	}
 
 	core = resDb
+
 	return core, nil
 }
 
 func (db *Database) Store(key string, value interface{}) {
-	db.Syncmap.Store(key, value)
+	if !REPLACE_KEY {
+		_, exist := db.Syncmap.Load(key)
+		if !exist {
+			db.Syncmap.Store(key, value)
+		}
+	} else {
+		db.Syncmap.Store(key, value)
+	}
+
+	return
 }
 
 func (db *Database) Delete(key string) {
@@ -87,20 +121,31 @@ func (db *Database) Load(key string) (value interface{}, exist bool) {
 // save function send request to server
 // server compare and set var db *Database
 // as database send in json request
-func (db *Database) Save(ctx context.Context) {
+func (db *Database) Save() {
 	dataMap := make(map[string]interface{})
 	db.Syncmap.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
 		return true
 	})
 
-	j, err := json.Marshal(&dataMap)
+	request := reqServerSave{
+		AuthKey:    &auth_security_key,
+		Cache:      &dataMap,
+		PrivateKey: db.PrivateKey,
+	}
+
+	j, err := json.Marshal(&request)
 	if err != nil {
 		fmt.Println(err)
 	}
 
-	req, err := http.NewRequest("POST",fmt.Sprintf("%s/tkv_v1/save", db.Url), bytes.NewBuffer(j))
-	req = req.WithContext(ctx)
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 1024,
+		TLSHandshakeTimeout: 0 * time.Second,
+	}
+	client = &http.Client{Transport: tr}
+
+	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
 func (db *Database) Access() syncmap.Map {

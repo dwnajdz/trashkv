@@ -9,11 +9,20 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/google/uuid"
 	"golang.org/x/sync/syncmap"
 )
 
 // global database variable
 var tkvdb syncmap.Map
+
+// private key for server
+var global_private_key []byte
+
+// auth key is key for making database/server connection safer
+// it is creating new uuid key
+// everytime user is saving
+var auth_security_key = uuid.New().String()
 
 // config
 var (
@@ -41,7 +50,34 @@ var (
 	//
 	// if you have disable it all your data when server will stop will be gone
 	SAVE_CACHE = true
+
+	// FALSE
+	// whenever you will store new key in database 
+	// if this key exist it will not be changed
+	// ---
+	// TRUE
+	// whenever you will store new key the old key will be repalced with the new one
+	REPLACE_KEY = false
 )
+
+// port must have ':' before number
+func Host(port string, server *http.ServeMux) {
+	url := fmt.Sprintf("localhost%s", port)
+
+	server.HandleFunc("/tkv_v1/connect", TkvRouteConnect)
+	server.HandleFunc("/tkv_v1/save", TkvRouteCompareAndSave)
+	server.HandleFunc("/tkv_v1/sync", TkvRouteSyncWithServers)
+	server.HandleFunc("/tkv_v1/status", TkvRouteStatus)
+	server.HandleFunc("/tkv_v1/servers.json", TkvRouteServersJson)
+	http.PostForm(fmt.Sprintf("http://%s/tkv_v1/sync", url), nil)
+
+	go func() {
+		log.Printf("Listening on http://%s", url)
+		http.ListenAndServe(url, server)
+	}()
+
+	defer log.Println("server stopped working")
+}
 
 func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 	if SAVE_CACHE {
@@ -73,37 +109,53 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 		fmt.Println(err)
 	}
 
-	fmt.Fprint(w, string(j))
+	if global_private_key == nil {
+		fmt.Fprint(w, string(j))
+	} else {
+		txt, err := encrypt(global_private_key, string(j))
+		if err != nil {
+			log.Println(err)
+		}
+
+		fmt.Fprint(w, txt)
+	}
 }
 
 func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
-	var request map[string]interface{}
+	var response reqServerSave
 	var newdb syncmap.Map
 
 	// Try to decode the request body into the struct. If there is an error,
 	// respond to the client with the error message and a 400 status code.
-	err := json.NewDecoder(r.Body).Decode(&request)
+	err := json.NewDecoder(r.Body).Decode(&response)
 	if err != nil {
 		log.Println(err)
 	}
 
 	// check if request is not nil
 	if r.Method == "POST" {
-		for key, value := range request {
-			newdb.Store(key, value)
-		}
-
-		tkvdb = newdb
-
-		// send request to all servers be synced
-		http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
-
-		if SAVE_CACHE {
-			j, err := json.Marshal(&request)
-			if err != nil {
-				log.Println(err)
+		if response.AuthKey != &auth_security_key {
+			for key, value := range *response.Cache {
+				newdb.Store(key, value)
 			}
-			ioutil.WriteFile(CACHE_PATH, j, 0644)
+
+			tkvdb = newdb
+			if global_private_key == nil {
+				global_private_key = *response.PrivateKey
+			}
+
+			// send request to make all servers synchronized
+			http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
+
+			if SAVE_CACHE {
+				j, err := json.Marshal(&response.Cache)
+				if err != nil {
+					log.Println(err)
+				}
+				ioutil.WriteFile(CACHE_PATH, j, 0644)
+			}
+
+			auth_security_key = uuid.NewString()
 		}
 	}
 }
@@ -113,7 +165,7 @@ func TkvRouteStatus(w http.ResponseWriter, r *http.Request) {
 	result := make(map[string]string)
 
 	for key, value := range servers {
-		_, err := Connect(value)
+		_, err := Connect(value, "")
 		if err == nil {
 			result[key] = "active"
 		} else {
@@ -126,7 +178,7 @@ func TkvRouteStatus(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 
-	fmt.Fprintf(w, string(jsonRes))
+	fmt.Fprint(w, string(jsonRes))
 }
 
 func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
@@ -136,13 +188,13 @@ func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 
 		for key, value := range jsonf {
 			if key != SERVER_NAME {
-				save(tkvdb, value)
+				syncAllServers(tkvdb, value)
 			}
 		}
 	}
 }
 
-func save(inDatabase syncmap.Map, url string) {
+func syncAllServers(inDatabase syncmap.Map, url string) {
 	dataMap := make(map[string]interface{})
 	inDatabase.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
