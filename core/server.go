@@ -50,6 +50,14 @@ var (
 	//
 	// if you have disable it all your data when server will stop will be gone
 	SAVE_CACHE = true
+
+	// FALSE
+	// whenever you will store new key in database 
+	// if this key exist it will not be changed
+	// ---
+	// TRUE
+	// whenever you will store new key the old key will be repalced with the new one
+	REPLACE_KEY = false
 )
 
 // port must have ':' before number
@@ -127,7 +135,6 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 	// check if request is not nil
 	if r.Method == "POST" {
 		if response.AuthKey != &auth_security_key {
-			fmt.Println("request here 1")
 			for key, value := range *response.Cache {
 				newdb.Store(key, value)
 			}

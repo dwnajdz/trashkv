@@ -8,6 +8,7 @@ import (
 
 func main() {	
 	core.SAVE_CACHE = false
+	core.REPLACE_KEY = false
 	http.HandleFunc("/tkv_v1/connect", core.TkvRouteConnect)
 	http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
 	http.HandleFunc("/tkv_v1/sync", core.TkvRouteSyncWithServers)

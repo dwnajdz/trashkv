@@ -89,7 +89,16 @@ func Connect(url, privateKey string) (Core, error) {
 }
 
 func (db *Database) Store(key string, value interface{}) {
-	db.Syncmap.Store(key, value)
+	if !REPLACE_KEY {
+		_, exist := db.Syncmap.Load(key)
+		if !exist {
+			db.Syncmap.Store(key, value)
+		}
+	} else {
+		db.Syncmap.Store(key, value)
+	}
+
+	return
 }
 
 func (db *Database) Delete(key string) {
