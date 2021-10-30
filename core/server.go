@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -43,7 +42,7 @@ var (
 	// you can set it to whatever port you want
 	PORT = "80"
 
-	CACHE_PATH = "./cache.json"
+	CACHE_PATH = "./cache.tkv"
 	// SAVE_IN_JSON as said its save your database in ./cache.json
 	// if SAVE_IN_JSON is enabled all your data will not be lost
 	// and restored when server will be started
@@ -52,12 +51,12 @@ var (
 	SAVE_CACHE = true
 
 	// FALSE
-	// whenever you will store new key in database 
+	// whenever you will store new key in database
 	// if this key exist it will not be changed
 	// ---
 	// TRUE
 	// whenever you will store new key the old key will be repalced with the new one
-	REPLACE_KEY = false
+	REPLACE_KEY = true
 )
 
 // port must have ':' before number
@@ -81,6 +80,7 @@ func Host(port string, server *http.ServeMux) {
 
 func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 	if SAVE_CACHE {
+		connkey := r.URL.Query().Get("key")
 		if _, err := os.Stat(CACHE_PATH); !os.IsNotExist(err) {
 			res := make(map[string]interface{})
 			file, err := ioutil.ReadFile(CACHE_PATH)
@@ -88,12 +88,23 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 				log.Println(err)
 			}
 
-			if err := json.Unmarshal(file, &res); err != nil {
-				log.Println(err)
-			}
+			if len(file) > 0 {
+				cache, err := decrypt([]byte(connkey), string(file))
+				if err != nil {
+					log.Println(err)
+				}
 
-			for key, value := range res {
-				tkvdb.Store(key, value)
+				if err = json.Unmarshal([]byte(cache), &res); err != nil {
+					log.Println(err)
+				}
+
+				for key, value := range res {
+					tkvdb.Store(key, value)
+				}
+
+				if len(cache) > 2 {
+					global_private_key = []byte(connkey)
+				}
 			}
 		}
 	}
@@ -152,68 +163,16 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					log.Println(err)
 				}
-				ioutil.WriteFile(CACHE_PATH, j, 0644)
+
+				txt, err := encrypt(global_private_key, string(j))
+				if err != nil {
+					log.Println(err)
+				}
+
+				ioutil.WriteFile(CACHE_PATH, []byte(txt), 0744)
 			}
 
 			auth_security_key = uuid.NewString()
 		}
 	}
-}
-
-func TkvRouteStatus(w http.ResponseWriter, r *http.Request) {
-	servers := ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
-	result := make(map[string]string)
-
-	for key, value := range servers {
-		_, err := Connect(value, "")
-		if err == nil {
-			result[key] = "active"
-		} else {
-			result[key] = "dead"
-		}
-	}
-
-	jsonRes, err := json.MarshalIndent(&result, " ", " ")
-	if err != nil {
-		log.Println(err)
-	}
-
-	fmt.Fprint(w, string(jsonRes))
-}
-
-func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
-	if r.Method == "POST" {
-		log.Println("/sync request")
-		jsonf := ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
-
-		for key, value := range jsonf {
-			if key != SERVER_NAME {
-				syncAllServers(tkvdb, value)
-			}
-		}
-	}
-}
-
-func syncAllServers(inDatabase syncmap.Map, url string) {
-	dataMap := make(map[string]interface{})
-	inDatabase.Range(func(k interface{}, v interface{}) bool {
-		dataMap[k.(string)] = v
-		return true
-	})
-
-	j, err := json.Marshal(&dataMap)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	http.Post(fmt.Sprintf("%s/tkv_v1/sync/save", url), "application/json", bytes.NewBuffer(j))
-}
-
-func TkvRouteServersJson(w http.ResponseWriter, r *http.Request) {
-	file, err := ioutil.ReadFile(SERVERS_JSON_PATH)
-	if err != nil {
-		log.Println(err)
-	}
-
-	fmt.Fprint(w, string(file))
 }

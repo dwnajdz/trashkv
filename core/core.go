@@ -33,9 +33,9 @@ type Core interface {
 // req = request
 // request server save
 type reqServerSave struct {
-	AuthKey    *string
-	Cache      *map[string]interface{}
-	PrivateKey *[]byte
+	AuthKey    *string                 `json:"AuthKey"`
+	Cache      *map[string]interface{} `json:"Cache"`
+	PrivateKey *[]byte                 `json:"PrivateKey"`
 }
 
 var client *http.Client
@@ -49,7 +49,9 @@ func Connect(url, privateKey string) (Core, error) {
 	var syncm syncmap.Map
 	var core Core
 
-	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect", url))
+	key := "hello"
+
+	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, key))
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +130,7 @@ func (db *Database) Save() {
 		return true
 	})
 
-	request := reqServerSave{
+	request := &reqServerSave{
 		AuthKey:    &auth_security_key,
 		Cache:      &dataMap,
 		PrivateKey: db.PrivateKey,
@@ -141,16 +143,18 @@ func (db *Database) Save() {
 
 	tr := &http.Transport{
 		MaxIdleConnsPerHost: 1024,
-		TLSHandshakeTimeout: 0 * time.Second,
+		TLSHandshakeTimeout: 1 * time.Second,
 	}
 	client = &http.Client{Transport: tr}
 
 	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
+/*
 func (db *Database) Access() syncmap.Map {
 	return db.Syncmap
 }
+*/
 
 // json function
 func ReadSeversJson(path string, servers map[string]string) map[string]string {

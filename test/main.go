@@ -8,33 +8,30 @@ import (
 	"github.com/wspirrat/trashkv/core"
 )
 
-type db_save struct {
-	id     int
-	name   string
-	idname string
+type MyStruct struct {
+	Id     int
+	Name   string
+	Idname string
 }
 
 func main() {
 	start := time.Now()
-	core.REPLACE_KEY = true
-
-	db, err := core.Connect("http://localhost:80", "hello")
-	if err != nil {
-		fmt.Println(err)
-	}
-	for i := 0; i < 501; i++ {
-		save := db_save{
-			id:     i,
-			name:   "k" + strconv.Itoa(i),
-			idname: strconv.Itoa(i),
+	db, _ := core.Connect("http://localhost:80", "hello")
+	
+	for i := 0; i < 0; i++ {
+		save := MyStruct{
+			Id:     i,
+			Name:   "k" + strconv.Itoa(i),
+			Idname: strconv.Itoa(i),
 		}
+
 		db.Store("k"+strconv.Itoa(i), save)
 	}
 
 	db.Save()
-	db.Store("k500", "changed :(")
-	answer, exist := db.Load("k500")
+	answer, exist := db.Load("k3")
 	fmt.Println(answer, ",", exist)
+
 	elapsed := time.Since(start)
 	fmt.Println(elapsed)
 }
