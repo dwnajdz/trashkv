@@ -49,9 +49,7 @@ func Connect(url, privateKey string) (Core, error) {
 	var syncm syncmap.Map
 	var core Core
 
-	key := "hello"
-
-	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, key))
+	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, privateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -98,9 +96,8 @@ func (db *Database) Store(key string, value interface{}) {
 		}
 	} else {
 		db.Syncmap.Store(key, value)
+		return
 	}
-
-	return
 }
 
 func (db *Database) Delete(key string) {
