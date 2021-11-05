@@ -28,6 +28,7 @@ type Core interface {
 	Delete(key string)
 	Load(key string) (interface{}, bool)
 	Save()
+	Access() syncmap.Map // only for dashboard
 }
 
 // req = request
@@ -49,9 +50,7 @@ func Connect(url, privateKey string) (Core, error) {
 	var syncm syncmap.Map
 	var core Core
 
-	key := "hello"
-
-	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, key))
+	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, privateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -98,9 +97,8 @@ func (db *Database) Store(key string, value interface{}) {
 		}
 	} else {
 		db.Syncmap.Store(key, value)
+		return
 	}
-
-	return
 }
 
 func (db *Database) Delete(key string) {
@@ -150,11 +148,9 @@ func (db *Database) Save() {
 	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
 }
 
-/*
 func (db *Database) Access() syncmap.Map {
 	return db.Syncmap
 }
-*/
 
 // json function
 func ReadSeversJson(path string, servers map[string]string) map[string]string {
