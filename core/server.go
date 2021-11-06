@@ -7,6 +7,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"time"
 
 	"github.com/google/uuid"
 	"golang.org/x/sync/syncmap"
@@ -155,8 +156,14 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 				global_private_key = *response.PrivateKey
 			}
 
+			tr := &http.Transport{
+				MaxIdleConnsPerHost: 1024,
+				TLSHandshakeTimeout: 1 * time.Hour,
+			}
+			client = &http.Client{Transport: tr}
+
 			// send request to make all servers synchronized
-			http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
+			defer client.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
 
 			if SAVE_CACHE {
 				j, err := json.Marshal(&response.Cache)

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
+	"time"
 	"net/http"
 
 	"golang.org/x/sync/syncmap"
@@ -14,9 +15,10 @@ import (
 func TkvRouteStatus(w http.ResponseWriter, r *http.Request) {
 	servers := ReadSeversJson(SERVERS_JSON_PATH, SERVERS_JSON)
 	result := make(map[string]string)
+	keys := r.URL.Query()
 
 	for key, value := range servers {
-		_, err := Connect(value, "")
+		_, err := Connect(value, keys.Get("sk"))
 		if err == nil {
 			result[key] = "active"
 		} else {
@@ -39,6 +41,7 @@ func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 
 		for key, value := range jsonf {
 			if key != SERVER_NAME {
+				log.Printf("synced with: %s", value)
 				syncAllServers(tkvdb, value)
 			}
 		}
@@ -57,7 +60,12 @@ func syncAllServers(inDatabase syncmap.Map, url string) {
 		fmt.Println(err)
 	}
 
-	http.Post(fmt.Sprintf("%s/tkv_v1/sync/save", url), "application/json", bytes.NewBuffer(j))
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 1024,
+		TLSHandshakeTimeout: 1 * time.Second,
+	}
+	client = &http.Client{Transport: tr}
+	client.Post(fmt.Sprintf("%s/tkv_v1/sync", url), "application/json", bytes.NewBuffer(j))
 }
 
 func TkvRouteServersJson(w http.ResponseWriter, r *http.Request) {

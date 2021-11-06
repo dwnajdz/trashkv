@@ -1,3 +1,4 @@
 {
- "node": "http://localhost:80"
+ "node": "http://localhost:80",
+ "server0": "http://localhost:9001"
 }
