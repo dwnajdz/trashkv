@@ -3,7 +3,7 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-lg-12">
-                <h1 class="page-header">/dashboard.storage</h1>
+                <h1 class="page-header">/dashboard.servers</h1>
             </div>
             <!-- /.col-lg-12 -->
         </div>
@@ -13,7 +13,7 @@
                 <div class="panel panel-default">
                     <div class="panel-heading">
                         <button type="button" class="btn btn-primary" data-toggle="modal" data-target="#storenew">
-                            Store New Key
+                            Create New Node
                         </button>
                         <!-- Modal -->
                         <div class="modal fade" id="storenew" tabindex="-1" role="dialog" aria-labelledby="myModalLabel"
@@ -23,28 +23,16 @@
                                     <div class="modal-header">
                                         <button type="button" class="close" data-dismiss="modal"
                                             aria-hidden="true">&times;</button>
-                                        <h4 class="modal-title" id="myModalLabel">Security</h4>
+                                        <h4 class="modal-title" id="myModalLabel">Form</h4>
                                     </div>
                                     <div class="modal-body">
                                         <form method="POST" action="http://localhost:80/addact/">
-                                            <input class="form-control" placeholder="Key:" name="inpkey" type="text"
+                                            <input class="form-control" placeholder="Server Name:" name="sname" type="text"
                                                 autofocus>
                                             <hr>
-                                            <input class="form-control" placeholder="Value:" name="inpval" type="text">
+                                            <input class="form-control" placeholder="Port:" name="sport" type="text">
                                             <hr>
-                                            <select class="form-select" name="typeofkey"
-                                                aria-label="Default select example">
-                                                <option selected>Select type: </option>
-                                                <option value="int">int</option>
-                                                <option value="string">string</option>
-                                                <option value="array">[]string (type each value after ,)</option>
-                                                <!--
-                                                <option value="array">[]byte</option>
-                                                <option value="array">map[string]string</option>
-                                                -->
-                                            </select>
-                                            <hr>
-                                            <button type="submit" class="btn btn-success">Store</button>
+                                            <button type="submit" class="btn btn-success">Create</button>
                                         </form>
                                     </div>
                                     <div class="modal-footer">
@@ -66,14 +54,16 @@
                                     <tr>
                                         <th>Key:</th>
                                         <th>Value:</th>
+                                        <th>Status:</th>
                                         <th>:</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {{ range $key, $value := .Database }}
-                                    <tr>
+                                    {{ range $key, $value := .Servers }}
+                                    <tr class="even gradeC">
                                         <td>{{ $key }}</td>
-                                        <td>{{ $value }}</td>
+                                        <td><a href="{{ $value }}/tkv_v1/connect">{{ $value }}</a></td>
+                                        <td></td>
                                         <td> <button type="button" class="btn btn-danger" data-toggle="modal"
                                                 data-target="#myModal">
                                                 Delete
@@ -94,7 +84,7 @@
                                                         <div class="modal-footer">
                                                             <button type="button" class="btn btn-default"
                                                                 data-dismiss="modal">Close</button>
-                                                            <a href="/delete/?key={{ $key }}"
+                                                            <a href="/delete/?key={{ $key}}"
                                                                 class="btn btn-danger">Delete</a>
                                                         </div>
                                                     </div>

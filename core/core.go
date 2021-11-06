@@ -153,6 +153,7 @@ func (db *Database) Access() syncmap.Map {
 }
 
 // json function
+// if you want only read json in second argument just pass nil
 func ReadSeversJson(path string, servers map[string]string) map[string]string {
 	var res map[string]string
 

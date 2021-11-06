@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"html/template"
 	"net/http"
+	"strconv"
+	"strings"
 
 	"github.com/gorilla/sessions"
 	"github.com/wspirrat/trashkv/core"
@@ -17,6 +19,7 @@ var (
 type TemplateData struct {
 	ActiveRoute ActiveRoute
 	Database    map[string]interface{}
+	Servers     map[string]string
 }
 
 type ActiveRoute struct {
@@ -24,8 +27,11 @@ type ActiveRoute struct {
 	Storage   bool
 }
 
+type addPostForm struct {
+}
+
 func main() {
-	core.SAVE_CACHE = false
+	core.SAVE_CACHE = true
 	core.REPLACE_KEY = true
 	http.HandleFunc("/tkv_v1/connect", core.TkvRouteConnect)
 	http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
@@ -49,8 +55,12 @@ func main() {
 		}
 	})
 	http.HandleFunc("/login", login)
+	http.HandleFunc("/logout/", logout)
+	http.HandleFunc("/dashboard", storage)
 	http.HandleFunc("/dashboard/storage", storage)
-	http.HandleFunc("/dashboard", dashboard)
+	http.HandleFunc("/delete/", delete)
+	http.HandleFunc("/addact/", addact)
+	http.HandleFunc("/dashboard/servers", servers)
 
 	http.ListenAndServe(":80", nil)
 }
@@ -81,6 +91,15 @@ func login(w http.ResponseWriter, r *http.Request) {
 	tmpl.Execute(w, nil)
 }
 
+func logout(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "cookie-name")
+
+	session.Values["authenticated"] = false
+	session.Values["key"] = nil
+	session.Save(r, w)
+	http.Redirect(w, r, "http://localhost:80/login", http.StatusMovedPermanently)
+}
+
 func dashboard(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
 
@@ -103,13 +122,10 @@ func storage(w http.ResponseWriter, r *http.Request) {
 	session, _ := store.Get(r, "session")
 
 	if auth, ok := session.Values["authenticated"].(bool); !ok || !auth {
-		//http.Redirect(w, r, "http://localhost:80/login?redirect=/dashboard", http.StatusMovedPermanently)
+		http.Redirect(w, r, "http://localhost:80/login?redirect=/dashboard/storage", http.StatusMovedPermanently)
 	} else {
 		tmpl, err := template.New("").ParseFiles("frontend/pages/database.html", "frontend/TEMPLATE.html")
 		if err != nil {
-			fmt.Println(err)
-		}
-		if err = tmpl.ExecuteTemplate(w, "base", nil); err != nil {
 			fmt.Println(err)
 		}
 
@@ -120,13 +136,10 @@ func storage(w http.ResponseWriter, r *http.Request) {
 
 		dataMap := make(map[string]interface{})
 		dbaccess := db.Access()
-		fmt.Println(db)
 		dbaccess.Range(func(k interface{}, v interface{}) bool {
 			dataMap[k.(string)] = v
 			return true
 		})
-
-		fmt.Println(dataMap)
 
 		tmplData := TemplateData{
 			ActiveRoute: ActiveRoute{
@@ -136,6 +149,91 @@ func storage(w http.ResponseWriter, r *http.Request) {
 			Database: dataMap,
 		}
 
-		tmpl.Execute(w, tmplData)
+		if err = tmpl.ExecuteTemplate(w, "base", tmplData); err != nil {
+			fmt.Println(err)
+		}
+	}
+}
+
+func delete(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	keys := r.URL.Query()
+	key := keys.Get("key")
+
+	if auth, ok := session.Values["authenticated"].(bool); ok || auth {
+		db, err := core.Connect("http://localhost:80", session.Values["key"].(string))
+		if err != nil {
+			fmt.Println(err)
+		}
+		if key != "" {
+			db.Delete(key)
+			db.Save()
+			http.Redirect(w, r, "http://localhost:80/dashboard/storage", http.StatusMovedPermanently)
+		}
+	}
+}
+
+func addact(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	if auth, ok := session.Values["authenticated"].(bool); ok || auth {
+		db, err := core.Connect("http://localhost:80", session.Values["key"].(string))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+		if r.Method == "POST" {
+			key := r.FormValue("inpkey")
+			value := r.FormValue("inpval")
+			if key == "" {
+				http.Redirect(w, r, "http://localhost:80/dashboard/storage?status=wrongkey", http.StatusMovedPermanently)
+			}
+
+			if r.FormValue("int") != "" {
+				newval, err := strconv.Atoi(value)
+				if err != nil {
+					fmt.Println(err)
+				}
+				db.Store(key, newval)
+			} else if r.FormValue("array") != "" {
+				newval := strings.Split(value, ",")
+				db.Store(key, newval)
+			} else {
+				db.Store(key, value)
+			}
+
+			db.Save()
+			http.Redirect(w, r, "http://localhost:80/dashboard/storage", http.StatusMovedPermanently)
+		}
+
+	}
+}
+
+func servers(w http.ResponseWriter, r *http.Request) {
+	session, _ := store.Get(r, "session")
+	servers := core.ReadSeversJson("./servers.json", nil)
+
+	if auth, ok := session.Values["authenticated"].(bool); ok || auth {
+		tmpl, err := template.New("").ParseFiles("frontend/pages/servers.html", "frontend/TEMPLATE.html")
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		_, err = core.Connect("http://localhost:80", session.Values["key"].(string))
+		if err != nil {
+			fmt.Println(err)
+			return
+		}
+
+		tmplData := TemplateData{
+			ActiveRoute: ActiveRoute{
+				Dashboard: false,
+				Storage:   true,
+			},
+			Servers: servers,
+		}
+
+		if err = tmpl.ExecuteTemplate(w, "base", tmplData); err != nil {
+			fmt.Println(err)
+		}
 	}
 }

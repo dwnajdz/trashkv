@@ -18,7 +18,7 @@ func main() {
 	start := time.Now()
 	db, _ := core.Connect("http://localhost:80", "hello")
 	
-	for i := 0; i < 0; i++ {
+	for i := 0; i < 50; i++ {
 		save := MyStruct{
 			Id:     i,
 			Name:   "k" + strconv.Itoa(i),
