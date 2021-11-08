@@ -16,7 +16,7 @@ type MyStruct struct {
 
 func main() {
 	start := time.Now()
-	db, _ := core.Connect("http://localhost:80", "hello")
+	db, _ := core.Connect("http://localhost:9001", "hello")
 	
 	for i := 0; i < 1000; i++ {
 		save := MyStruct{

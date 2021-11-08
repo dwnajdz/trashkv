@@ -7,9 +7,8 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"time"
 
-	"github.com/google/uuid"
+	_ "github.com/google/uuid"
 	"golang.org/x/sync/syncmap"
 )
 
@@ -22,13 +21,14 @@ var global_private_key []byte
 // auth key is key for making database/server connection safer
 // it is creating new uuid key
 // everytime user is saving
-var auth_security_key = uuid.New().String()
+//var auth_security_key = uuid.New().String()
 
 // config
 var (
 	// used in 119 line in sync_with_servers() function
 	// It is optional you can leave it blank
 	SERVER_NAME = "node0"
+	SERVER_URL  = fmt.Sprintf("http://localhost:%s", PORT)
 	// declare servers and child servers names
 	// !!!
 	// always declare current server name first
@@ -134,7 +134,7 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
-	var response reqServerSave
+	var response reqHTTPdataSave
 	var newdb syncmap.Map
 
 	// Try to decode the request body into the struct. If there is an error,
@@ -146,40 +146,32 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 
 	// check if request is not nil
 	if r.Method == "POST" {
-		if response.AuthKey != &auth_security_key {
-			for key, value := range *response.Cache {
-				newdb.Store(key, value)
-			}
+		//if response.AuthKey != &auth_security_key
+		for key, value := range *response.Cache {
+			newdb.Store(key, value)
+		}
 
-			tkvdb = newdb
-			if global_private_key == nil {
-				global_private_key = *response.PrivateKey
-			}
+		tkvdb = newdb
+		if global_private_key == nil {
+			global_private_key = *response.PrivateKey
+		}
 
-			tr := &http.Transport{
-				MaxIdleConnsPerHost: 1024,
-				TLSHandshakeTimeout: 1 * time.Hour,
-			}
-			client = &http.Client{Transport: tr}
-
-			// send request to make all servers synchronized
-			defer client.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
-
-			if SAVE_CACHE {
-				j, err := json.Marshal(&response.Cache)
-				if err != nil {
-					log.Println(err)
-				}
-
-				txt, err := encrypt(global_private_key, string(j))
-				if err != nil {
-					log.Println(err)
-				}
-
-				ioutil.WriteFile(CACHE_PATH, []byte(txt), 0744)
-			}
-
-			auth_security_key = uuid.NewString()
+		if SAVE_CACHE {
+			save_cache_file(&response)
 		}
 	}
+}
+
+func save_cache_file(response *reqHTTPdataSave) {
+	j, err := json.Marshal(&response.Cache)
+	if err != nil {
+		log.Println(err)
+	}
+
+	txt, err := encrypt(global_private_key, string(j))
+	if err != nil {
+		log.Println(err)
+	}
+
+	ioutil.WriteFile(CACHE_PATH, []byte(txt), 0744)
 }

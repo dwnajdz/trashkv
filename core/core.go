@@ -32,8 +32,10 @@ type Core interface {
 
 // req = request
 // request server save
-type reqServerSave struct {
-	AuthKey    *string                 `json:"AuthKey"`
+type reqHTTPdataSave struct {
+	//AuthKey    *string                 `json:"AuthKey"`
+	Sender     *string
+	Receiver   *string
 	Cache      *map[string]interface{} `json:"Cache"`
 	PrivateKey *[]byte                 `json:"PrivateKey"`
 }
@@ -127,8 +129,8 @@ func (db *Database) Save() {
 		return true
 	})
 
-	request := &reqServerSave{
-		AuthKey:    &auth_security_key,
+	request := &reqHTTPdataSave{
+		//AuthKey:    &auth_security_key,
 		Cache:      &dataMap,
 		PrivateKey: db.PrivateKey,
 	}
@@ -145,6 +147,7 @@ func (db *Database) Save() {
 	client = &http.Client{Transport: tr}
 
 	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
+	client.PostForm(fmt.Sprintf("%s/tkv_v1/sync", db.Url), nil)
 }
 
 /*

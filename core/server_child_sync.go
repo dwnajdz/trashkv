@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io/ioutil"
 	"log"
-	"time"
 	"net/http"
+	"time"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -48,14 +48,20 @@ func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func syncAllServers(inDatabase syncmap.Map, url string) {
+func syncAllServers(inDatabase syncmap.Map, receiver string) {
 	dataMap := make(map[string]interface{})
 	inDatabase.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
 		return true
 	})
 
-	j, err := json.Marshal(&dataMap)
+	request := reqHTTPdataSave{
+		Sender:     &SERVER_URL,
+		Receiver:   &receiver,
+		Cache:      &dataMap,
+		PrivateKey: &global_private_key,
+	}
+	readyToSendRequest, err := json.Marshal(&request)
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -65,7 +71,7 @@ func syncAllServers(inDatabase syncmap.Map, url string) {
 		TLSHandshakeTimeout: 1 * time.Second,
 	}
 	client = &http.Client{Transport: tr}
-	client.Post(fmt.Sprintf("%s/tkv_v1/sync", url), "application/json", bytes.NewBuffer(j))
+	client.Post(fmt.Sprintf("%s/tkv_v1/save", receiver), "application/json", bytes.NewBuffer(readyToSendRequest))
 }
 
 func TkvRouteServersJson(w http.ResponseWriter, r *http.Request) {
