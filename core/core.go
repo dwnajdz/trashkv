@@ -28,6 +28,7 @@ type Core interface {
 	Delete(key string)
 	Load(key string) (interface{}, bool)
 	Save()
+	Sync()
 }
 
 // req = request
@@ -147,6 +148,15 @@ func (db *Database) Save() {
 	client = &http.Client{Transport: tr}
 
 	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
+	
+}
+
+func (db *Database) Sync() {
+	tr := &http.Transport{
+		MaxIdleConnsPerHost: 1024,
+		TLSHandshakeTimeout: 1 * time.Second,
+	}
+	client = &http.Client{Transport: tr}
 	client.PostForm(fmt.Sprintf("%s/tkv_v1/sync", db.Url), nil)
 }
 

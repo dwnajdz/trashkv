@@ -1,6 +1,7 @@
 package core
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -147,13 +148,18 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 	// check if request is not nil
 	if r.Method == "POST" {
 		//if response.AuthKey != &auth_security_key
-		for key, value := range *response.Cache {
-			newdb.Store(key, value)
-		}
 
-		tkvdb = newdb
 		if global_private_key == nil {
 			global_private_key = *response.PrivateKey
+		}
+
+		if bytes.Equal(*response.PrivateKey, global_private_key) {
+			for key, value := range *response.Cache {
+				newdb.Store(key, value)
+			}
+			tkvdb = newdb
+		} else {
+			http.Error(w, "aes: wrong key", http.StatusBadRequest)
 		}
 
 		if SAVE_CACHE {
