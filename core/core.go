@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
-	"os"
 	"time"
 
 	"golang.org/x/sync/syncmap"
@@ -34,11 +33,10 @@ type Core interface {
 // req = request
 // request server save
 type reqHTTPdataSave struct {
-	//AuthKey    *string                 `json:"AuthKey"`
 	Sender     *string
 	Receiver   *string
-	Cache      *map[string]interface{} `json:"Cache"`
-	PrivateKey *[]byte                 `json:"PrivateKey"`
+	Cache      *map[string]interface{}
+	PrivateKey *[]byte
 }
 
 var client *http.Client
@@ -51,6 +49,7 @@ func Connect(url, privateKey string) (Core, error) {
 	var dat map[string]interface{}
 	var syncm syncmap.Map
 	var core Core
+	var dbPrivateKey []byte
 
 	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, privateKey))
 	if err != nil {
@@ -63,6 +62,7 @@ func Connect(url, privateKey string) (Core, error) {
 		if err := json.Unmarshal([]byte(body), &dat); err != nil {
 			return nil, err
 		}
+		dbPrivateKey = []byte(privateKey)
 	} else {
 		txt, err := decrypt([]byte(privateKey), string(body))
 		if err != nil {
@@ -72,6 +72,8 @@ func Connect(url, privateKey string) (Core, error) {
 		if err := json.Unmarshal([]byte(txt), &dat); err != nil {
 			return nil, errors.New("private key is wrong")
 		}
+
+		dbPrivateKey = makeSHA256([]byte(privateKey))
 	}
 
 	// add all keys from dat to syncm
@@ -79,9 +81,8 @@ func Connect(url, privateKey string) (Core, error) {
 		syncm.Store(key, value)
 	}
 
-	dbpk := []byte(privateKey)
 	resDb := &Database{
-		PrivateKey: &dbpk,
+		PrivateKey: &dbPrivateKey,
 		Url:        url,
 		Syncmap:    syncm,
 	}
@@ -92,7 +93,7 @@ func Connect(url, privateKey string) (Core, error) {
 }
 
 func (db *Database) Store(key string, value interface{}) {
-	if !REPLACE_KEY {
+	if !replace_key {
 		_, exist := db.Syncmap.Load(key)
 		if !exist {
 			db.Syncmap.Store(key, value)
@@ -131,7 +132,6 @@ func (db *Database) Save() {
 	})
 
 	request := &reqHTTPdataSave{
-		//AuthKey:    &auth_security_key,
 		Cache:      &dataMap,
 		PrivateKey: db.PrivateKey,
 	}
@@ -148,7 +148,7 @@ func (db *Database) Save() {
 	client = &http.Client{Transport: tr}
 
 	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
-	
+
 }
 
 func (db *Database) Sync() {
@@ -165,25 +165,3 @@ func (db *Database) Access() syncmap.Map {
 	return db.Syncmap
 }
 */
-
-// json function
-func ReadSeversJson(path string, servers map[string]string) map[string]string {
-	var res map[string]string
-
-	if _, err := os.Stat(path); !os.IsNotExist(err) {
-		file, err := ioutil.ReadFile(path)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		if err := json.Unmarshal(file, &res); err != nil {
-			fmt.Println(err)
-		}
-
-		return res
-	} else {
-		file, _ := json.MarshalIndent(servers, "", " ")
-		_ = ioutil.WriteFile(SERVERS_JSON_PATH, file, 0644)
-	}
-	return nil
-}

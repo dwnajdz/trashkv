@@ -23,7 +23,6 @@ func main() {
 	http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
 	http.HandleFunc("/tkv_v1/sync", core.TkvRouteSyncWithServers)
 	http.HandleFunc("/tkv_v1/status", core.TkvRouteStatus)
-	http.HandleFunc("/tkv_v1/servers.json", core.TkvRouteServersJson)
 
 	log.Println("server working...")
 	http.ListenAndServe(":" + port, nil)

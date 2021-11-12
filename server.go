@@ -1,19 +1,22 @@
 package main
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/wspirrat/trashkv/core"
 )
 
-func main() {	
-	core.SAVE_CACHE = false
-	core.REPLACE_KEY = true
-	http.HandleFunc("/tkv_v1/connect", core.TkvRouteConnect)
-	http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
-	http.HandleFunc("/tkv_v1/sync", core.TkvRouteSyncWithServers)
-	http.HandleFunc("/tkv_v1/status", core.TkvRouteStatus)
-	http.HandleFunc("/tkv_v1/servers.json", core.TkvRouteServersJson) 
+func main() {
+	trashkv := core.TrashKvMuxConfig{
+		Port:       "80",
+		SaveCache:  true,
+		CachePath:  "./cache.tkv",
+		ReplaceKey: true,
+	}
 
-	http.ListenAndServe(":80", nil)
-} 
+	handler := trashkv.Serve()
+
+	log.Println("Server started on: http://localhost:80")
+	http.ListenAndServe("localhost:80", handler)
+}
