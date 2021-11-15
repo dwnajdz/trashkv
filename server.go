@@ -3,13 +3,16 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 
 	"github.com/wspirrat/trashkv/core"
 )
 
 func main() {
+	port := os.Getenv("PORT")
+
 	trashkv := core.TrashKvMuxConfig{
-		Port:       "80",
+		Port:       port,
 		SaveCache:  true,
 		CachePath:  "./cache.tkv",
 		ReplaceKey: true,
@@ -18,5 +21,5 @@ func main() {
 	handler := trashkv.Serve()
 
 	log.Println("Server started on: http://localhost:80")
-	http.ListenAndServe("localhost:80", handler)
+	log.Fatal(http.ListenAndServe(":"+port, handler))
 }

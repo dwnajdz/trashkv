@@ -160,9 +160,10 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 
 		// this is created for checking either private key is encrypted in sha256
 		var check_global_private_key []byte
-
+		// when its first insertion set global key to user key
 		if saves == 0 {
 			check_global_private_key = global_private_key
+			saves++
 		} else {
 			check_global_private_key = makeSHA256(global_private_key)
 		}
@@ -179,9 +180,8 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "aes: wrong key", http.StatusBadRequest)
 		}
 
-		saves++
+		//saves++
 	}
-	log.Printf("/save :%d", saves)
 }
 
 func save_cache_file(response *reqHTTPdataSave) {
