@@ -1,6 +1,8 @@
 package core
 
 import (
+	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -21,34 +23,37 @@ var global_private_key []byte
 // auth key is key for making database/server connection safer
 // it is creating new uuid key
 // everytime user is saving
-var auth_security_key = uuid.New().String()
+//var Http_security_key uuid.UUID
+
+var saves = 0
 
 // config
 var (
 	// used in 119 line in sync_with_servers() function
 	// It is optional you can leave it blank
-	SERVER_NAME = "node0"
+	server_name string
+	server_url  = fmt.Sprintf("http://localhost:%s", port)
 	// declare servers and child servers names
 	// !!!
 	// always declare current server name first
-	SERVERS_JSON = map[string]string{
-		"node": fmt.Sprintf("http://localhost:%s", PORT),
+	servers_json = map[string]string{
+		"node": fmt.Sprintf("http://localhost:%s", port),
 		// example of second server
 		//"child1": fmt.Sprintf("http://localhost:8894",),
 	}
-	SERVERS_JSON_PATH = "./servers.json"
+	server_json_path = "./servers.json"
 
 	// port of server
 	// you can set it to whatever port you want
-	PORT = "80"
+	port string
 
-	CACHE_PATH = "./cache.tkv"
+	cache_path = "./cache.tkv"
 	// SAVE_IN_JSON as said its save your database in ./cache.json
 	// if SAVE_IN_JSON is enabled all your data will not be lost
 	// and restored when server will be started
 	//
 	// if you have disable it all your data when server will stop will be gone
-	SAVE_CACHE = true
+	save_cache = true
 
 	// FALSE
 	// whenever you will store new key in database
@@ -56,34 +61,38 @@ var (
 	// ---
 	// TRUE
 	// whenever you will store new key the old key will be repalced with the new one
-	REPLACE_KEY = true
+	replace_key = true
 )
 
-// port must have ':' before number
-func Host(port string, server *http.ServeMux) {
-	url := fmt.Sprintf("localhost%s", port)
+type TrashKvMuxConfig struct {
+	Port       string
+	SaveCache  bool
+	CachePath  string
+	ReplaceKey bool
+}
 
-	server.HandleFunc("/tkv_v1/connect", TkvRouteConnect)
-	server.HandleFunc("/tkv_v1/save", TkvRouteCompareAndSave)
-	server.HandleFunc("/tkv_v1/sync", TkvRouteSyncWithServers)
-	server.HandleFunc("/tkv_v1/status", TkvRouteStatus)
-	server.HandleFunc("/tkv_v1/servers.json", TkvRouteServersJson)
-	http.PostForm(fmt.Sprintf("http://%s/tkv_v1/sync", url), nil)
+func (config *TrashKvMuxConfig) Serve() http.Handler {
+	server_name = uuid.NewString()
 
-	go func() {
-		log.Printf("Listening on http://%s", url)
-		http.ListenAndServe(url, server)
-	}()
+	port = config.Port
+	save_cache = config.SaveCache
+	cache_path = config.CachePath
+	replace_key = config.ReplaceKey
 
-	defer log.Println("server stopped working")
+	mux := http.NewServeMux()
+	mux.HandleFunc("/tkv_v1/connect", TkvRouteConnect)
+	mux.HandleFunc("/tkv_v1/save", TkvRouteCompareAndSave)
+	mux.HandleFunc("/tkv_v1/sync", TkvRouteSyncWithServers)
+
+	return mux
 }
 
 func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
-	if SAVE_CACHE {
+	if save_cache {
 		connkey := r.URL.Query().Get("key")
-		if _, err := os.Stat(CACHE_PATH); !os.IsNotExist(err) {
+		if _, err := os.Stat(cache_path); !os.IsNotExist(err) {
 			res := make(map[string]interface{})
-			file, err := ioutil.ReadFile(CACHE_PATH)
+			file, err := ioutil.ReadFile(cache_path)
 			if err != nil {
 				log.Println(err)
 			}
@@ -133,7 +142,7 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 }
 
 func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
-	var response reqServerSave
+	var response reqHTTPdataSave
 	var newdb syncmap.Map
 
 	// Try to decode the request body into the struct. If there is an error,
@@ -145,34 +154,51 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 
 	// check if request is not nil
 	if r.Method == "POST" {
-		if response.AuthKey != &auth_security_key {
+		if global_private_key == nil {
+			global_private_key = *response.PrivateKey
+		}
+
+		// this is created for checking either private key is encrypted in sha256
+		var check_global_private_key []byte
+		// when its first insertion set global key to user key
+		if saves == 0 {
+			check_global_private_key = global_private_key
+			saves++
+		} else {
+			check_global_private_key = makeSHA256(global_private_key)
+		}
+
+		if bytes.Equal(*response.PrivateKey, check_global_private_key) {
 			for key, value := range *response.Cache {
 				newdb.Store(key, value)
 			}
-
 			tkvdb = newdb
-			if global_private_key == nil {
-				global_private_key = *response.PrivateKey
+			if save_cache {
+				save_cache_file(&response)
 			}
-
-			// send request to make all servers synchronized
-			http.PostForm(fmt.Sprintf("http://localhost:%s/tkv_v1/sync", PORT), nil)
-
-			if SAVE_CACHE {
-				j, err := json.Marshal(&response.Cache)
-				if err != nil {
-					log.Println(err)
-				}
-
-				txt, err := encrypt(global_private_key, string(j))
-				if err != nil {
-					log.Println(err)
-				}
-
-				ioutil.WriteFile(CACHE_PATH, []byte(txt), 0744)
-			}
-
-			auth_security_key = uuid.NewString()
+		} else {
+			http.Error(w, "aes: wrong key", http.StatusBadRequest)
 		}
+
+		//saves++
 	}
+}
+
+func save_cache_file(response *reqHTTPdataSave) {
+	j, err := json.Marshal(&response.Cache)
+	if err != nil {
+		log.Println(err)
+	}
+
+	txt, err := encrypt(global_private_key, string(j))
+	if err != nil {
+		log.Println(err)
+	}
+
+	ioutil.WriteFile(cache_path, []byte(txt), 0744)
+}
+
+func makeSHA256(data []byte) []byte {
+	hash := sha256.Sum256(data)
+	return hash[:]
 }

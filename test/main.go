@@ -18,7 +18,7 @@ func main() {
 	start := time.Now()
 	db, _ := core.Connect("http://localhost:80", "hello")
 	
-	for i := 0; i < 0; i++ {
+	for i := 0; i < 10000; i++ {
 		save := MyStruct{
 			Id:     i,
 			Name:   "k" + strconv.Itoa(i),
@@ -29,7 +29,7 @@ func main() {
 	}
 
 	db.Save()
-	answer, exist := db.Load("k3")
+	answer, exist := db.Load("k9999")
 	fmt.Println(answer, ",", exist)
 
 	elapsed := time.Since(start)
