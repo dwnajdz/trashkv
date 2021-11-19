@@ -168,8 +168,16 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 			check_global_private_key = makeSHA256(global_private_key)
 		}
 
+		// check if keys are the same
 		if bytes.Equal(*response.PrivateKey, check_global_private_key) {
-			for key, value := range *response.Cache {
+			var cache map[string]interface{}
+			reqCache, _ := decrypt(*response.PrivateKey, *response.Cache)
+			err = json.Unmarshal([]byte(reqCache), &cache)
+			if err != nil {
+				fmt.Println(err)
+			}
+
+			for key, value := range cache {
 				newdb.Store(key, value)
 			}
 			tkvdb = newdb

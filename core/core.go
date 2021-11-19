@@ -35,7 +35,7 @@ type Core interface {
 type reqHTTPdataSave struct {
 	Sender     *string
 	Receiver   *string
-	Cache      *map[string]interface{}
+	Cache      *string
 	PrivateKey *[]byte
 }
 
@@ -131,8 +131,15 @@ func (db *Database) Save() {
 		return true
 	})
 
+	safeDataMap, err := json.Marshal(&dataMap)
+	if err != nil {
+		fmt.Println(err)
+	}
+	
+	rdy_safeDataMap, _ := encrypt(*db.PrivateKey, string(safeDataMap))
+
 	request := &reqHTTPdataSave{
-		Cache:      &dataMap,
+		Cache:      &rdy_safeDataMap,
 		PrivateKey: db.PrivateKey,
 	}
 

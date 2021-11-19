@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
-	"time"
-	"io/ioutil"
 	"os"
+	"time"
 
 	"golang.org/x/sync/syncmap"
 )
@@ -30,6 +30,7 @@ func TkvRouteStatus(secret_key string) map[string]bool {
 	return result
 }
 
+// tkv_v1/sync route
 func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 	if r.Method == "POST" {
 		log.Println("/sync request")
@@ -38,23 +39,30 @@ func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 		for key, value := range jsonf {
 			if key != server_name {
 				log.Printf("synced with: %s", value)
-				syncAllServers(tkvdb, value)
+				syncAllServers(global_private_key, tkvdb, value)
 			}
 		}
 	}
 }
 
-func syncAllServers(inDatabase syncmap.Map, receiver string) {
+func syncAllServers(private_key []byte, inDatabase syncmap.Map, receiver string) {
 	dataMap := make(map[string]interface{})
 	inDatabase.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
 		return true
 	})
 
+	safeDataMap, err := json.Marshal(&dataMap)
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	rdy_safeDataMap, _ := encrypt(private_key, string(safeDataMap))
+
 	request := reqHTTPdataSave{
 		Sender:     &server_url,
 		Receiver:   &receiver,
-		Cache:      &dataMap,
+		Cache:      &rdy_safeDataMap,
 		PrivateKey: &global_private_key,
 	}
 	readyToSendRequest, err := json.Marshal(&request)
