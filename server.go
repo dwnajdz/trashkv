@@ -20,7 +20,7 @@ func main() {
 	//port := os.Getenv("PORT")
 
 	trashkv := core.TrashKvMuxConfig{
-		Port:       "80",
+		Port:       "1010",
 		SaveCache:  false,
 		CachePath:  "./cache.tkv",
 		ReplaceKey: true,

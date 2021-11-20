@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"golang.org/x/net/http2"
-	"golang.org/x/sync/syncmap"
 )
 
 const (
@@ -19,8 +18,8 @@ const (
 )
 
 type Database struct {
-	Url     string
-	Syncmap syncmap.Map
+	Url   string
+	Cache map[string]interface{}
 }
 
 type Core interface {
@@ -47,7 +46,6 @@ func Connect(url, privateKey string) (Core, error) {
 	// syncm is Syncmap passed in *Database
 	// core is interface which is returned
 	var dat map[string]interface{}
-	var syncm syncmap.Map
 	var core Core
 
 	resp, err := http.Get(fmt.Sprintf("%s/?key=%s", url, privateKey))
@@ -66,14 +64,9 @@ func Connect(url, privateKey string) (Core, error) {
 		}
 	}
 
-	// add all keys from dat to syncm
-	for key, value := range dat {
-		syncm.Store(key, value)
-	}
-
 	resDb := &Database{
-		Url:     url,
-		Syncmap: syncm,
+		Url:   url,
+		Cache: dat,
 	}
 
 	core = resDb
@@ -82,19 +75,11 @@ func Connect(url, privateKey string) (Core, error) {
 }
 
 func (db *Database) Store(key string, value interface{}) {
-	if !replace_key {
-		_, exist := db.Syncmap.Load(key)
-		if !exist {
-			db.Syncmap.Store(key, value)
-		}
-	} else {
-		db.Syncmap.Store(key, value)
-		return
-	}
+	db.Cache[key] = value
 }
 
 func (db *Database) Delete(key string) {
-	db.Syncmap.Delete(key)
+	delete(db.Cache, key)
 }
 
 // returns value
@@ -102,7 +87,7 @@ func (db *Database) Delete(key string) {
 // if object exist returns true
 // else if object do not exist returns false
 func (db *Database) Load(key string) (value interface{}, exist bool) {
-	result, exist := db.Syncmap.Load(key)
+	result, exist := db.Cache[key]
 	if exist {
 		return result, true
 	}
@@ -114,14 +99,8 @@ func (db *Database) Load(key string) (value interface{}, exist bool) {
 // server compare and set var db *Database
 // as database send in json request
 func (db *Database) Save() {
-	dataMap := make(map[string]interface{})
-	db.Syncmap.Range(func(k interface{}, v interface{}) bool {
-		dataMap[k.(string)] = v
-		return true
-	})
-
 	request := &reqHTTPdataSave{
-		Cache: &dataMap,
+		Cache: &db.Cache,
 	}
 
 	j, err := json.Marshal(&request)
@@ -137,8 +116,7 @@ func (db *Database) Save() {
 	}
 	client = &http.Client{Transport: tr}
 
-	client.Post(fmt.Sprintf("%s", db.Url), "application/json", bytes.NewBuffer(j))
-
+	client.Post(db.Url, "application/json", bytes.NewBuffer(j))
 }
 
 func (db *Database) Sync() {

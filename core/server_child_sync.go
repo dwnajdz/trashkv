@@ -1,5 +1,5 @@
 package core
-
+/*
 import (
 	"bytes"
 	"encoding/json"
@@ -44,7 +44,7 @@ func TkvRouteSyncWithServers(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-func syncAllServers(inDatabase syncmap.Map, receiver string) {
+func syncAllServers(inDatabase map[string]interface{}, receiver string) {
 	dataMap := make(map[string]interface{})
 	inDatabase.Range(func(k interface{}, v interface{}) bool {
 		dataMap[k.(string)] = v
@@ -90,3 +90,4 @@ func ReadSeversJson(path string, servers map[string]string) map[string]string {
 	}
 	return nil
 }
+*/

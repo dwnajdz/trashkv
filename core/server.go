@@ -11,11 +11,10 @@ import (
 	"github.com/google/uuid"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-	"golang.org/x/sync/syncmap"
 )
 
 // global database variable
-var tkvdb syncmap.Map
+var tkvdb = make(map[string]interface{})
 
 // private key for server
 //var global_private_key []byte
@@ -45,7 +44,7 @@ var (
 
 	// port of server
 	// you can set it to whatever port you want
-	port string
+	port = "80"
 
 	cache_path = "./cache.json"
 	// SAVE_IN_JSON as said its save your database in ./cache.json
@@ -81,14 +80,15 @@ func (config *TrashKvMuxConfig) Serve() {
 
 	h2s := &http2.Server{}
 
+	addr := fmt.Sprintf("0.0.0.0:%s", port)
 	handler := http.HandlerFunc(TkvHandler)
 
 	server := &http.Server{
-		Addr:    "0.0.0.0:1010",
+		Addr:    addr,
 		Handler: h2c.NewHandler(handler, h2s),
 	}
 
-	fmt.Printf("Listening [0.0.0.0:1010]...\n")
+	fmt.Printf("Listening %s...\n", addr)
 	checkErr(server.ListenAndServe(), "while listening")
 }
 
@@ -128,7 +128,6 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 
 func TkvHandler(w http.ResponseWriter, r *http.Request) {
 	var response reqHTTPdataSave
-	var newdb syncmap.Map
 
 	// check if request is not nil
 	if r.Method == "POST" {
@@ -139,28 +138,15 @@ func TkvHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 
-		for key, value := range *response.Cache {
-			newdb.Store(key, value)
-		}
-		tkvdb = newdb
+		tkvdb = *response.Cache
 		if save_cache {
 			save_cache_file(&response)
 		}
 	} else if r.Method == "GET" {
-		dataMap := make(map[string]interface{})
-		tkvdb.Range(func(k interface{}, v interface{}) bool {
-			dataMap[k.(string)] = v
-			return true
-		})
-
-		j, err := json.Marshal(&dataMap)
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		fmt.Fprint(w, string(j))
+		json.NewEncoder(w).Encode(tkvdb)
 	}
 }
+
 
 func save_cache_file(response *reqHTTPdataSave) {
 	j, err := json.Marshal(&response.Cache)

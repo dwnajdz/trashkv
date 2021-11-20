@@ -18,9 +18,10 @@ func main() {
 	start := time.Now()
 	db, _ := core.Connect("http://localhost:1010", "hello")
 	
-	for i := 0; i < 400000; i++ {
+	for i := 0; i < 1000000; i++ {
 		db.Store("k"+strconv.Itoa(i), i)
 	}
+
 	db.Save()
 	elapsed := time.Since(start)
 	fmt.Println(elapsed)
