@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -19,7 +18,7 @@ import (
 var tkvdb syncmap.Map
 
 // private key for server
-var global_private_key []byte
+//var global_private_key []byte
 
 // auth key is key for making database/server connection safer
 // it is creating new uuid key
@@ -48,7 +47,7 @@ var (
 	// you can set it to whatever port you want
 	port string
 
-	cache_path = "./cache.tkv"
+	cache_path = "./cache.json"
 	// SAVE_IN_JSON as said its save your database in ./cache.json
 	// if SAVE_IN_JSON is enabled all your data will not be lost
 	// and restored when server will be started
@@ -140,20 +139,12 @@ func TkvHandler(w http.ResponseWriter, r *http.Request) {
 			log.Println(err)
 		}
 
-		if global_private_key == nil {
-			global_private_key = *response.PrivateKey
+		for key, value := range *response.Cache {
+			newdb.Store(key, value)
 		}
-
-		if bytes.Equal(*response.PrivateKey, global_private_key) {
-			for key, value := range *response.Cache {
-				newdb.Store(key, value)
-			}
-			tkvdb = newdb
-			if save_cache {
-				save_cache_file(&response)
-			}
-		} else {
-			http.Error(w, "aes: wrong key", http.StatusBadRequest)
+		tkvdb = newdb
+		if save_cache {
+			save_cache_file(&response)
 		}
 	} else if r.Method == "GET" {
 		dataMap := make(map[string]interface{})
@@ -167,16 +158,7 @@ func TkvHandler(w http.ResponseWriter, r *http.Request) {
 			fmt.Println(err)
 		}
 
-		if global_private_key == nil {
-			fmt.Fprint(w, string(j))
-		} else {
-			txt, err := encrypt(global_private_key, string(j))
-			if err != nil {
-				log.Println(err)
-			}
-
-			fmt.Fprint(w, txt)
-		}
+		fmt.Fprint(w, string(j))
 	}
 }
 
@@ -186,12 +168,7 @@ func save_cache_file(response *reqHTTPdataSave) {
 		log.Println(err)
 	}
 
-	txt, err := encrypt(global_private_key, string(j))
-	if err != nil {
-		log.Println(err)
-	}
-
-	ioutil.WriteFile(cache_path, []byte(txt), 0744)
+	ioutil.WriteFile(cache_path, j, 0744)
 }
 
 func checkErr(err error, msg string) {

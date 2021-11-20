@@ -55,7 +55,6 @@ func syncAllServers(inDatabase syncmap.Map, receiver string) {
 		Sender:     &server_url,
 		Receiver:   &receiver,
 		Cache:      &dataMap,
-		PrivateKey: &global_private_key,
 	}
 	readyToSendRequest, err := json.Marshal(&request)
 	if err != nil {

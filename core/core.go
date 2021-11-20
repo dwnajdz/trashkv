@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"crypto/tls"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -20,9 +19,8 @@ const (
 )
 
 type Database struct {
-	PrivateKey *[]byte
-	Url        string
-	Syncmap    syncmap.Map
+	Url     string
+	Syncmap syncmap.Map
 }
 
 type Core interface {
@@ -36,10 +34,9 @@ type Core interface {
 // req = request
 // request server save
 type reqHTTPdataSave struct {
-	Sender     *string
-	Receiver   *string
-	Cache      *map[string]interface{}
-	PrivateKey *[]byte
+	Sender   *string
+	Receiver *string
+	Cache    *map[string]interface{}
 }
 
 var client *http.Client
@@ -52,7 +49,6 @@ func Connect(url, privateKey string) (Core, error) {
 	var dat map[string]interface{}
 	var syncm syncmap.Map
 	var core Core
-	dbPrivateKey := []byte(privateKey)
 
 	resp, err := http.Get(fmt.Sprintf("%s/?key=%s", url, privateKey))
 	if err != nil {
@@ -64,13 +60,9 @@ func Connect(url, privateKey string) (Core, error) {
 	if len(body) <= 2 {
 		dat = map[string]interface{}{}
 	} else {
-		txt, err := decrypt([]byte(privateKey), string(body))
-		if err != nil {
-			return nil, errors.New("private key is wrong")
-		}
 		// unmarshal decrypted text
-		if err := json.Unmarshal([]byte(txt), &dat); err != nil {
-			return nil, errors.New("private key is wrong")
+		if err := json.Unmarshal(body, &dat); err != nil {
+			return nil, err
 		}
 	}
 
@@ -80,9 +72,8 @@ func Connect(url, privateKey string) (Core, error) {
 	}
 
 	resDb := &Database{
-		PrivateKey: &dbPrivateKey,
-		Url:        url,
-		Syncmap:    syncm,
+		Url:     url,
+		Syncmap: syncm,
 	}
 
 	core = resDb
@@ -130,8 +121,7 @@ func (db *Database) Save() {
 	})
 
 	request := &reqHTTPdataSave{
-		Cache:      &dataMap,
-		PrivateKey: db.PrivateKey,
+		Cache: &dataMap,
 	}
 
 	j, err := json.Marshal(&request)
