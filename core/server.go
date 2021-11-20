@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -11,6 +10,8 @@ import (
 	"os"
 
 	"github.com/google/uuid"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 	"golang.org/x/sync/syncmap"
 )
 
@@ -25,7 +26,7 @@ var global_private_key []byte
 // everytime user is saving
 //var Http_security_key uuid.UUID
 
-var saves = 0
+//var saves = 0
 
 // config
 var (
@@ -71,7 +72,7 @@ type TrashKvMuxConfig struct {
 	ReplaceKey bool
 }
 
-func (config *TrashKvMuxConfig) Serve() http.Handler {
+func (config *TrashKvMuxConfig) Serve() {
 	server_name = uuid.NewString()
 
 	port = config.Port
@@ -79,14 +80,20 @@ func (config *TrashKvMuxConfig) Serve() http.Handler {
 	cache_path = config.CachePath
 	replace_key = config.ReplaceKey
 
-	mux := http.NewServeMux()
-	mux.HandleFunc("/tkv_v1/connect", TkvRouteConnect)
-	mux.HandleFunc("/tkv_v1/save", TkvRouteCompareAndSave)
-	mux.HandleFunc("/tkv_v1/sync", TkvRouteSyncWithServers)
+	h2s := &http2.Server{}
 
-	return mux
+	handler := http.HandlerFunc(TkvHandler)
+
+	server := &http.Server{
+		Addr:    "0.0.0.0:1010",
+		Handler: h2c.NewHandler(handler, h2s),
+	}
+
+	fmt.Printf("Listening [0.0.0.0:1010]...\n")
+	checkErr(server.ListenAndServe(), "while listening")
 }
 
+/*
 func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 	if save_cache {
 		connkey := r.URL.Query().Get("key")
@@ -117,58 +124,27 @@ func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
+}
+*/
 
-	dataMap := make(map[string]interface{})
-	tkvdb.Range(func(k interface{}, v interface{}) bool {
-		dataMap[k.(string)] = v
-		return true
-	})
+func TkvHandler(w http.ResponseWriter, r *http.Request) {
+	var response reqHTTPdataSave
+	var newdb syncmap.Map
 
-	j, err := json.Marshal(&dataMap)
-	if err != nil {
-		fmt.Println(err)
-	}
-
-	if global_private_key == nil {
-		fmt.Fprint(w, string(j))
-	} else {
-		txt, err := encrypt(global_private_key, string(j))
+	// check if request is not nil
+	if r.Method == "POST" {
+		// Try to decode the request body into the struct. If there is an error,
+		// respond to the client with the error message and a 400 status code.
+		err := json.NewDecoder(r.Body).Decode(&response)
 		if err != nil {
 			log.Println(err)
 		}
 
-		fmt.Fprint(w, txt)
-	}
-}
-
-func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
-	var response reqHTTPdataSave
-	var newdb syncmap.Map
-
-	// Try to decode the request body into the struct. If there is an error,
-	// respond to the client with the error message and a 400 status code.
-	err := json.NewDecoder(r.Body).Decode(&response)
-	if err != nil {
-		log.Println(err)
-	}
-
-	// check if request is not nil
-	if r.Method == "POST" {
 		if global_private_key == nil {
 			global_private_key = *response.PrivateKey
 		}
 
-		// this is created for checking either private key is encrypted in sha256
-		var check_global_private_key []byte
-		// when its first insertion set global key to user key
-		if saves == 0 {
-			check_global_private_key = global_private_key
-			saves++
-		} else {
-			check_global_private_key = makeSHA256(global_private_key)
-		}
-
-		if bytes.Equal(*response.PrivateKey, check_global_private_key) {
+		if bytes.Equal(*response.PrivateKey, global_private_key) {
 			for key, value := range *response.Cache {
 				newdb.Store(key, value)
 			}
@@ -179,8 +155,28 @@ func TkvRouteCompareAndSave(w http.ResponseWriter, r *http.Request) {
 		} else {
 			http.Error(w, "aes: wrong key", http.StatusBadRequest)
 		}
+	} else if r.Method == "GET" {
+		dataMap := make(map[string]interface{})
+		tkvdb.Range(func(k interface{}, v interface{}) bool {
+			dataMap[k.(string)] = v
+			return true
+		})
 
-		//saves++
+		j, err := json.Marshal(&dataMap)
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		if global_private_key == nil {
+			fmt.Fprint(w, string(j))
+		} else {
+			txt, err := encrypt(global_private_key, string(j))
+			if err != nil {
+				log.Println(err)
+			}
+
+			fmt.Fprint(w, txt)
+		}
 	}
 }
 
@@ -198,7 +194,10 @@ func save_cache_file(response *reqHTTPdataSave) {
 	ioutil.WriteFile(cache_path, []byte(txt), 0744)
 }
 
-func makeSHA256(data []byte) []byte {
-	hash := sha256.Sum256(data)
-	return hash[:]
+func checkErr(err error, msg string) {
+	if err == nil {
+		return
+	}
+	fmt.Printf("ERROR: %s: %s\n", msg, err)
+	os.Exit(1)
 }

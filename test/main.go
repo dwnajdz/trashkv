@@ -16,9 +16,9 @@ type MyStruct struct {
 
 func main() {
 	start := time.Now()
-	db, _ := core.Connect("http://localhost:80", "hello")
+	db, _ := core.Connect("http://localhost:1010", "hello")
 	
-	for i := 0; i < 1; i++ {
+	for i := 0; i < 1000000; i++ {
 		save := MyStruct{
 			Id:     i,
 			Name:   "k" + strconv.Itoa(i),
@@ -29,8 +29,6 @@ func main() {
 	}
 
 	db.Save()
-	answer, exist := db.Load("k0")
-	fmt.Println(answer, ",", exist)
 
 	elapsed := time.Since(start)
 	fmt.Println(elapsed)

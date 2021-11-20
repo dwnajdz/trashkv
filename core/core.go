@@ -2,13 +2,16 @@ package core
 
 import (
 	"bytes"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net"
 	"net/http"
 	"time"
 
+	"golang.org/x/net/http2"
 	"golang.org/x/sync/syncmap"
 )
 
@@ -49,9 +52,9 @@ func Connect(url, privateKey string) (Core, error) {
 	var dat map[string]interface{}
 	var syncm syncmap.Map
 	var core Core
-	var dbPrivateKey []byte
+	dbPrivateKey := []byte(privateKey)
 
-	resp, err := http.Get(fmt.Sprintf("%s/tkv_v1/connect?key=%s", url, privateKey))
+	resp, err := http.Get(fmt.Sprintf("%s/?key=%s", url, privateKey))
 	if err != nil {
 		return nil, err
 	}
@@ -59,10 +62,7 @@ func Connect(url, privateKey string) (Core, error) {
 	body, _ := ioutil.ReadAll(resp.Body)
 
 	if len(body) <= 2 {
-		if err := json.Unmarshal([]byte(body), &dat); err != nil {
-			return nil, err
-		}
-		dbPrivateKey = []byte(privateKey)
+		dat = map[string]interface{}{}
 	} else {
 		txt, err := decrypt([]byte(privateKey), string(body))
 		if err != nil {
@@ -72,8 +72,6 @@ func Connect(url, privateKey string) (Core, error) {
 		if err := json.Unmarshal([]byte(txt), &dat); err != nil {
 			return nil, errors.New("private key is wrong")
 		}
-
-		dbPrivateKey = makeSHA256([]byte(privateKey))
 	}
 
 	// add all keys from dat to syncm
@@ -141,13 +139,15 @@ func (db *Database) Save() {
 		fmt.Println(err)
 	}
 
-	tr := &http.Transport{
-		MaxIdleConnsPerHost: 1024,
-		TLSHandshakeTimeout: 1 * time.Second,
+	tr := &http2.Transport{
+		AllowHTTP: true,
+		DialTLS: func(network, addr string, cfg *tls.Config) (net.Conn, error) {
+			return net.Dial(network, addr)
+		},
 	}
 	client = &http.Client{Transport: tr}
 
-	client.Post(fmt.Sprintf("%s/tkv_v1/save", db.Url), "application/json", bytes.NewBuffer(j))
+	client.Post(fmt.Sprintf("%s", db.Url), "application/json", bytes.NewBuffer(j))
 
 }
 
