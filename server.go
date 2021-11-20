@@ -12,9 +12,6 @@ req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
 package main
 
 import (
-	"log"
-	"net/http"
-	//"os"
 
 	"github.com/wspirrat/trashkv/core"
 )
@@ -24,16 +21,11 @@ func main() {
 
 	trashkv := core.TrashKvMuxConfig{
 		Port:       "80",
-		SaveCache:  true,
+		SaveCache:  false,
 		CachePath:  "./cache.tkv",
 		ReplaceKey: true,
 	}
 
-	handler := trashkv.Serve()
-
-	//	log.Println("Server started on: http://localhost:80")
-	// log.Fatal(http.ListenAndServe(":"+port, handler))
-	err := http.ListenAndServeTLS(":80", "./rootca.crt", "./rootca.key", handler)
-	log.Fatal(err)
+	trashkv.Serve()
 }
 
