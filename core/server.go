@@ -8,7 +8,6 @@ import (
 	"net/http"
 	"os"
 
-	"github.com/google/uuid"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
 )
@@ -30,17 +29,17 @@ var tkvdb = make(map[string]interface{})
 var (
 	// used in 119 line in sync_with_servers() function
 	// It is optional you can leave it blank
-	server_name string
-	server_url  = fmt.Sprintf("http://localhost:%s", port)
+	//server_name string
+	//server_url  = fmt.Sprintf("http://localhost:%s", port)
 	// declare servers and child servers names
 	// !!!
 	// always declare current server name first
-	servers_json = map[string]string{
-		"node": fmt.Sprintf("http://localhost:%s", port),
+	//servers_json = map[string]string{
+		//"node": fmt.Sprintf("http://localhost:%s", port),
 		// example of second server
 		//"child1": fmt.Sprintf("http://localhost:8894",),
-	}
-	server_json_path = "./servers.json"
+	//}
+	//server_json_path = "./servers.json"
 
 	// port of server
 	// you can set it to whatever port you want
@@ -60,7 +59,7 @@ var (
 	// ---
 	// TRUE
 	// whenever you will store new key the old key will be repalced with the new one
-	replace_key = true
+	//replace_key = true
 )
 
 type TrashKvMuxConfig struct {
@@ -71,12 +70,12 @@ type TrashKvMuxConfig struct {
 }
 
 func (config *TrashKvMuxConfig) Serve() {
-	server_name = uuid.NewString()
+	//server_name = uuid.NewString()
 
 	port = config.Port
 	save_cache = config.SaveCache
 	cache_path = config.CachePath
-	replace_key = config.ReplaceKey
+	//replace_key = config.ReplaceKey
 
 	h2s := &http2.Server{}
 
@@ -91,40 +90,6 @@ func (config *TrashKvMuxConfig) Serve() {
 	fmt.Printf("Listening %s...\n", addr)
 	checkErr(server.ListenAndServe(), "while listening")
 }
-
-/*
-func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
-	if save_cache {
-		connkey := r.URL.Query().Get("key")
-		if _, err := os.Stat(cache_path); !os.IsNotExist(err) {
-			res := make(map[string]interface{})
-			file, err := ioutil.ReadFile(cache_path)
-			if err != nil {
-				log.Println(err)
-			}
-
-			if len(file) > 0 {
-				cache, err := decrypt([]byte(connkey), string(file))
-				if err != nil {
-					log.Println(err)
-				}
-
-				if err = json.Unmarshal([]byte(cache), &res); err != nil {
-					log.Println(err)
-				}
-
-				for key, value := range res {
-					tkvdb.Store(key, value)
-				}
-
-				if len(cache) > 2 {
-					global_private_key = []byte(connkey)
-				}
-			}
-		}
-	}
-}
-*/
 
 func TkvHandler(w http.ResponseWriter, r *http.Request) {
 	var response reqHTTPdataSave
