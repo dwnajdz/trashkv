@@ -52,7 +52,7 @@ func Connect(url, privateKey string) (Core, error) {
 	var dat map[string]interface{}
 	var syncm syncmap.Map
 	var core Core
-	dbPrivateKey := []byte(privateKey)
+	dbPrivateKey := md5hash([]byte(privateKey))
 
 	resp, err := http.Get(fmt.Sprintf("%s/?key=%s", url, privateKey))
 	if err != nil {
@@ -64,7 +64,7 @@ func Connect(url, privateKey string) (Core, error) {
 	if len(body) <= 2 {
 		dat = map[string]interface{}{}
 	} else {
-		txt, err := decrypt([]byte(privateKey), string(body))
+		txt, err := decrypt(dbPrivateKey, string(body))
 		if err != nil {
 			return nil, errors.New("private key is wrong")
 		}
@@ -147,7 +147,7 @@ func (db *Database) Save() {
 	}
 	client = &http.Client{Transport: tr}
 
-	client.Post(fmt.Sprintf("%s", db.Url), "application/json", bytes.NewBuffer(j))
+	client.Post(db.Url, "application/json", bytes.NewBuffer(j))
 
 }
 

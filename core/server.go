@@ -82,50 +82,17 @@ func (config *TrashKvMuxConfig) Serve() {
 
 	h2s := &http2.Server{}
 
+	addr := fmt.Sprintf("localhost:%s", port)
 	handler := http.HandlerFunc(TkvHandler)
 
 	server := &http.Server{
-		Addr:    "0.0.0.0:1010",
+		Addr:    addr,
 		Handler: h2c.NewHandler(handler, h2s),
 	}
 
-	fmt.Printf("Listening [0.0.0.0:1010]...\n")
+	fmt.Printf("[tkv] listening %s...\n", addr)
 	checkErr(server.ListenAndServe(), "while listening")
 }
-
-/*
-func TkvRouteConnect(w http.ResponseWriter, r *http.Request) {
-	if save_cache {
-		connkey := r.URL.Query().Get("key")
-		if _, err := os.Stat(cache_path); !os.IsNotExist(err) {
-			res := make(map[string]interface{})
-			file, err := ioutil.ReadFile(cache_path)
-			if err != nil {
-				log.Println(err)
-			}
-
-			if len(file) > 0 {
-				cache, err := decrypt([]byte(connkey), string(file))
-				if err != nil {
-					log.Println(err)
-				}
-
-				if err = json.Unmarshal([]byte(cache), &res); err != nil {
-					log.Println(err)
-				}
-
-				for key, value := range res {
-					tkvdb.Store(key, value)
-				}
-
-				if len(cache) > 2 {
-					global_private_key = []byte(connkey)
-				}
-			}
-		}
-	}
-}
-*/
 
 func TkvHandler(w http.ResponseWriter, r *http.Request) {
 	var response reqHTTPdataSave
@@ -156,6 +123,36 @@ func TkvHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "aes: wrong key", http.StatusBadRequest)
 		}
 	} else if r.Method == "GET" {
+		if save_cache {
+			connkey := r.URL.Query().Get("key")
+			if _, err := os.Stat(cache_path); !os.IsNotExist(err) {
+				res := make(map[string]interface{})
+				file, err := ioutil.ReadFile(cache_path)
+				if err != nil {
+					log.Println(err)
+				}
+
+				if len(file) > 0 {
+					cache, err := decrypt([]byte(connkey), string(file))
+					if err != nil {
+						log.Println(err)
+					}
+
+					if err = json.Unmarshal([]byte(cache), &res); err != nil {
+						log.Println(err)
+					}
+
+					for key, value := range res {
+						tkvdb.Store(key, value)
+					}
+
+					if len(cache) > 2 {
+						global_private_key = []byte(connkey)
+					}
+				}
+			}
+		}
+
 		dataMap := make(map[string]interface{})
 		tkvdb.Range(func(k interface{}, v interface{}) bool {
 			dataMap[k.(string)] = v

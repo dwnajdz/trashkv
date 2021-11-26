@@ -16,9 +16,9 @@ type MyStruct struct {
 
 func main() {
 	start := time.Now()
-	db, _ := core.Connect("http://localhost:1010", "hello")
+	db, _ := core.Connect("http://localhost:80", "mykey:)" )
 	
-	for i := 0; i < 1000000; i++ {
+	for i := 0; i < 1; i++ {
 		save := MyStruct{
 			Id:     i,
 			Name:   "k" + strconv.Itoa(i),

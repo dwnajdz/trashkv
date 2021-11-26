@@ -1,108 +1,55 @@
-// forked from https://gist.github.com/stupidbodo/601b68bfef3449d1b8d9
 package core
 
 import (
-	"bytes"
 	"crypto/aes"
-	"crypto/cipher"
 	"crypto/md5"
+	"crypto/cipher"
 	"crypto/rand"
-	"encoding/base64"
-	"errors"
+	"fmt"
 	"io"
-	"strings"
 )
 
-func addBase64Padding(value string) string {
-    m := len(value) % 4
-    if m != 0 {
-        value += strings.Repeat("=", 4-m)
-    }
+func encrypt(key []byte, message string) (string, error) {
+	byteMsg := []byte(message)
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("could not create new cipher: %v", err)
+	}
 
-    return value
+	cipherText := make([]byte, aes.BlockSize+len(byteMsg))
+	iv := cipherText[:aes.BlockSize]
+	if _, err = io.ReadFull(rand.Reader, iv); err != nil {
+		return "", fmt.Errorf("could not encrypt: %v", err)
+	}
+
+	stream := cipher.NewCFBEncrypter(block, iv)
+	stream.XORKeyStream(cipherText[aes.BlockSize:], byteMsg)
+
+	return string(cipherText), nil
 }
 
-func removeBase64Padding(value string) string {
-    return strings.Replace(value, "=", "", -1)
-}
+func decrypt(key []byte, message string) (string, error) {
+	cipherText := []byte(message)
 
-func Pad(src []byte) []byte {
-    padding := aes.BlockSize - len(src)%aes.BlockSize
-    padtext := bytes.Repeat([]byte{byte(padding)}, padding)
-    return append(src, padtext...)
-}
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return "", fmt.Errorf("could not create new cipher: %v", err)
+	}
 
-func Unpad(src []byte) ([]byte, error) {
-    length := len(src)
-    unpadding := int(src[length-1])
+	if len(cipherText) < aes.BlockSize {
+		return "", fmt.Errorf("invalid ciphertext block size")
+	}
 
-    if unpadding > length {
-        return nil, errors.New("unpad error. This could happen when incorrect encryption key is used")
-    }
+	iv := cipherText[:aes.BlockSize]
+	cipherText = cipherText[aes.BlockSize:]
 
-    return src[:(length - unpadding)], nil
-}
+	stream := cipher.NewCFBDecrypter(block, iv)
+	stream.XORKeyStream(cipherText, cipherText)
 
-func encrypt(key []byte, text string) (string, error) {
-    key = md5hash(key)
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return "", err
-    }
-
-    msg := Pad([]byte(text))
-    ciphertext := make([]byte, aes.BlockSize+len(msg))
-    iv := ciphertext[:aes.BlockSize]
-    if _, err := io.ReadFull(rand.Reader, iv); err != nil {
-        return "", err
-    }
-
-    cfb := cipher.NewCFBEncrypter(block, iv)
-    cfb.XORKeyStream(ciphertext[aes.BlockSize:], []byte(msg))
-    finalMsg := removeBase64Padding(base64.URLEncoding.EncodeToString(ciphertext))
-    return finalMsg, nil
-}
-
-func decrypt(key []byte, text string) (string, error) {
-    key = md5hash(key)
-    block, err := aes.NewCipher(key)
-    if err != nil {
-        return "", err
-    }
-
-    decodedMsg, err := base64.URLEncoding.DecodeString(addBase64Padding(text))
-    if err != nil {
-        return "", err
-    }
-
-    if (len(decodedMsg) % aes.BlockSize) != 0 {
-        return "", errors.New("blocksize must be multipe of decoded message length")
-    }
-
-    iv := decodedMsg[:aes.BlockSize]
-    msg := decodedMsg[aes.BlockSize:]
-
-    cfb := cipher.NewCFBDecrypter(block, iv)
-    cfb.XORKeyStream(msg, msg)
-
-    unpadMsg, err := Unpad(msg)
-    if err != nil {
-        return "", err
-    }
-
-    return string(unpadMsg), nil
+	return string(cipherText), nil
 }
 
 func md5hash(text []byte) []byte { 
-    key := md5.Sum([]byte(text))
-    return key[:]
+	key := md5.Sum([]byte(text))
+	return key[:]
 }
-
-/*
-func main() {
-    key := []byte("LKHlhb899Y09olUi")
-    encryptMsg, _ := encrypt(key, "Hello World")
-    msg, _ := decrypt(key, encryptMsg)
-    fmt.Println(msg) // Hello World
-}
-*/
