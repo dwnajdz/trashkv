@@ -27,9 +27,6 @@ type ActiveRoute struct {
 	Storage   bool
 }
 
-type addPostForm struct {
-}
-
 func main() {
 	core.SAVE_CACHE = true
 	core.REPLACE_KEY = true
@@ -37,7 +34,6 @@ func main() {
 	http.HandleFunc("/tkv_v1/save", core.TkvRouteCompareAndSave)
 	http.HandleFunc("/tkv_v1/sync", core.TkvRouteSyncWithServers)
 	http.HandleFunc("/tkv_v1/status", core.TkvRouteStatus)
-	http.HandleFunc("/tkv_v1/servers.json", core.TkvRouteServersJson)
 	http.PostForm("http://localhost:80/tkv_v1/sync", nil)
 
 	//panel
@@ -205,35 +201,5 @@ func addact(w http.ResponseWriter, r *http.Request) {
 			http.Redirect(w, r, "http://localhost:80/dashboard/storage", http.StatusMovedPermanently)
 		}
 
-	}
-}
-
-func servers(w http.ResponseWriter, r *http.Request) {
-	session, _ := store.Get(r, "session")
-	servers := core.ReadSeversJson("./servers.json", nil)
-
-	if auth, ok := session.Values["authenticated"].(bool); ok || auth {
-		tmpl, err := template.New("").ParseFiles("frontend/pages/servers.html", "frontend/TEMPLATE.html")
-		if err != nil {
-			fmt.Println(err)
-		}
-
-		_, err = core.Connect("http://localhost:80", session.Values["key"].(string))
-		if err != nil {
-			fmt.Println(err)
-			return
-		}
-
-		tmplData := TemplateData{
-			ActiveRoute: ActiveRoute{
-				Dashboard: false,
-				Storage:   true,
-			},
-			Servers: servers,
-		}
-
-		if err = tmpl.ExecuteTemplate(w, "base", tmplData); err != nil {
-			fmt.Println(err)
-		}
 	}
 }

@@ -1,4 +1,3 @@
-// forked from https://gist.github.com/stupidbodo/601b68bfef3449d1b8d9
 package core
 
 import (
@@ -97,12 +96,3 @@ func md5hash(text []byte) []byte {
     key := md5.Sum([]byte(text))
     return key[:]
 }
-
-/*
-func main() {
-    key := []byte("LKHlhb899Y09olUi")
-    encryptMsg, _ := encrypt(key, "Hello World")
-    msg, _ := decrypt(key, encryptMsg)
-    fmt.Println(msg) // Hello World
-}
-*/
